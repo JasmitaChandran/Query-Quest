@@ -15,6 +15,9 @@ import type {
   TableSummary,
   TableDataEdit,
   TableDefinition,
+  TableMigrationInspection,
+  TableSchemaMigrationInput,
+  TableSchemaMigrationResult,
 } from "@/lib/database/types";
 
 export interface DatabaseWorkerApi {
@@ -29,6 +32,8 @@ export interface DatabaseWorkerApi {
     rows: import("@/lib/database/types").SqlValue[][],
   ): Promise<{ rowCount: number }>;
   createTable(databaseId: string, definition: TableDefinition): Promise<{ tableName: string }>;
+  inspectTableMigration(databaseId: string, tableName: string): Promise<TableMigrationInspection>;
+  migrateTableSchema(databaseId: string, input: TableSchemaMigrationInput): Promise<TableSchemaMigrationResult>;
   getEditableTableRecords(databaseId: string, tableName: string, limit?: number, offset?: number): Promise<EditableTableRecords>;
   applyTableEdits(databaseId: string, tableName: string, edits: TableDataEdit[]): Promise<{ changedRows: number }>;
   listTables(databaseId: string): Promise<TableSummary[]>;
@@ -129,6 +134,14 @@ export class BrowserDatabaseWorkerClient implements DatabaseWorkerApi {
 
   createTable(databaseId: string, definition: TableDefinition) {
     return this.send("createTable", { databaseId, definition });
+  }
+
+  inspectTableMigration(databaseId: string, tableName: string) {
+    return this.send("inspectTableMigration", { databaseId, tableName });
+  }
+
+  migrateTableSchema(databaseId: string, input: TableSchemaMigrationInput) {
+    return this.send("migrateTableSchema", { databaseId, input });
   }
 
   getEditableTableRecords(databaseId: string, tableName: string, limit = 100, offset = 0) {

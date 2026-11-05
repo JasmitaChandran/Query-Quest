@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Check, DatabaseZap, FileCode2, HardDrive, ScanSearch, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Check, DatabaseZap, FileCode2, HardDrive, ScanSearch, ShieldCheck } from "lucide-react";
 
 import { CreateDatabaseDialog } from "@/components/import/create-database-dialog";
 import { DropZone } from "@/components/import/drop-zone";
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 const steps = [
-  { label: "Choose a file", state: "SQLite, CSV, or JSON", icon: Check },
+  { label: "Choose a file", state: "SQLite, MySQL dump, CSV, or JSON", icon: Check },
   { label: "Inspect schema", state: "Automatic", icon: ScanSearch },
   { label: "Save locally", state: "IndexedDB", icon: HardDrive },
 ] as const;
@@ -52,7 +52,7 @@ export default function ImportPage() {
               <DropZone />
               <div className="mt-4 flex flex-col items-start justify-between gap-3 border-t border-border px-2 pt-4 sm:flex-row sm:items-center">
                 <p className="text-xs leading-5 text-muted-foreground">
-                  Processing happens in a Web Worker, so large queries do not block the interface.
+                  Converted data is validated and committed through the worker-isolated SQLite engine.
                 </p>
               </div>
             </Card>
@@ -98,7 +98,7 @@ export default function ImportPage() {
                     <div>
                       <p className="font-medium">Supported formats</p>
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        .sqlite, .sqlite3, .db (up to 50 MB), CSV and JSON (up to 10 MB)
+                        .sqlite, .sqlite3, .db (up to 50 MB), MySQL .sql dumps (up to 25 MB), CSV and JSON (up to 10 MB)
                       </p>
                     </div>
                   </div>
@@ -111,6 +111,18 @@ export default function ImportPage() {
                       </p>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-amber-500/20 bg-card/70">
+                <CardHeader>
+                  <CardTitle>MySQL conversion subset</CardTitle>
+                </CardHeader>
+                <CardContent className="flex gap-3 text-sm">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Supports common table definitions, literal INSERT values, primary and basic foreign keys, and compatible indexes. MySQL routines, triggers, views, events, FULLTEXT/SPATIAL indexes, and server behavior are reported but not emulated.
+                  </p>
                 </CardContent>
               </Card>
             </div>

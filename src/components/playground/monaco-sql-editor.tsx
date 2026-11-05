@@ -15,15 +15,19 @@ import {
   LoaderCircle,
   Play,
   RotateCcw,
+  ShieldCheck,
+  Sparkles,
   WandSparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { PhaseNoticeDialog } from "@/components/phase-notice-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TableSchema, TableSummary } from "@/lib/database/types";
 import { useDatabaseStore } from "@/store/database-store";
+import { useWorkspaceStore } from "@/store/workspace-store";
+import { classifyUserSql, isDestructiveSql } from "@/lib/database/sql-safety";
+import { cn } from "@/lib/utils";
 
 loader.config({ monaco: monacoEditor });
 
@@ -90,16 +94,15 @@ const SQL_KEYWORDS = [
   "OR",
   "NOT",
   "NULL",
+  "INSERT INTO",
+  "UPDATE",
+  "DELETE FROM",
+  "CREATE TABLE",
+  "ALTER TABLE",
+  "DROP TABLE",
+  "VALUES",
+  "SET",
 ] as const;
-
-const INITIAL_QUERY = `SELECT
-  s.first_name,
-  s.last_name,
-  d.name AS department,
-  s.year_level
-FROM Students AS s
-JOIN Departments AS d ON d.id = s.department_id
-ORDER BY s.last_name;`;
 
 function defineQueryQuestThemes(monaco: Monaco) {
   monaco.editor.defineTheme("queryquest-dark", {
@@ -144,9 +147,8 @@ function defineQueryQuestThemes(monaco: Monaco) {
   });
 }
 
-export function MonacoSqlEditor() {
+export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: { presentation?: boolean; onVisualizationReady?: () => void } = {}) {
   const { resolvedTheme } = useTheme();
-  const [query, setQuery] = React.useState(INITIAL_QUERY);
   const editorRef = React.useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null);
   const completionProviderRef = React.useRef<monacoEditor.IDisposable | null>(null);
   const completionDataRef = React.useRef<{
@@ -160,6 +162,14 @@ export function MonacoSqlEditor() {
   const tables = useDatabaseStore((state) => state.tables);
   const tableSchemas = useDatabaseStore((state) => state.tableSchemas);
   const runQuery = useDatabaseStore((state) => state.runQuery);
+  const visualizeQuery = useDatabaseStore((state) => state.visualizeQuery);
+  const isVisualizationLoading = useDatabaseStore((state) => state.isVisualizationLoading);
+  const queuedSql = useWorkspaceStore((state) => state.queuedSql);
+  const runRequest = useWorkspaceStore((state) => state.runRequest);
+  const consumeSqlRun = useWorkspaceStore((state) => state.consumeSqlRun);
+  const setActivePanel = useWorkspaceStore((state) => state.setActivePanel);
+  const query = useWorkspaceStore((state) => state.editorSql);
+  const setQuery = useWorkspaceStore((state) => state.setEditorSql);
 
   React.useEffect(() => {
     completionDataRef.current = { tables, schemas: tableSchemas };
@@ -168,6 +178,7 @@ export function MonacoSqlEditor() {
   const executeQuery = React.useCallback(
     async (sql: string) => {
       if (!sql.trim() || isQueryRunning || status !== "ready" || !activeDatabaseId) return;
+      if (isDestructiveSql(sql) && !window.confirm("This SQL can delete data or alter schema. A checkpoint will be saved first. Continue?")) return;
       try {
         await runQuery(sql);
         toast.success("Query complete", { description: "The result table has been updated." });
@@ -184,6 +195,17 @@ export function MonacoSqlEditor() {
   React.useEffect(() => {
     executeQueryRef.current = executeQuery;
   }, [executeQuery]);
+
+  React.useEffect(() => {
+    if (!runRequest || !queuedSql) return;
+    const timeout = window.setTimeout(() => {
+      consumeSqlRun();
+      setQuery(queuedSql);
+      editorRef.current?.setValue(queuedSql);
+      void executeQueryRef.current(queuedSql);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [consumeSqlRun, queuedSql, runRequest, setQuery]);
 
   const handleMount = React.useCallback<OnMount>(
     (editor, monaco) => {
@@ -267,14 +289,29 @@ export function MonacoSqlEditor() {
     }
   };
 
+  const handleVisualize = async () => {
+    const sql = editorRef.current?.getValue() ?? query;
+    if (!sql.trim()) return;
+    try {
+      const operation = classifyUserSql(sql);
+      if (operation === "write" && !window.confirm("Visualizing this statement will execute it once against the active database. A checkpoint will be saved first, and replaying the animation will not execute it again. Continue?")) return;
+      await visualizeQuery(sql);
+      if (onVisualizationReady) onVisualizationReady();
+      else setActivePanel("visualizer");
+      toast.success(operation === "write" ? "Modification visualized" : "Visualization ready", { description: operation === "write" ? "The write ran once and is protected by Undo." : "SQLite validated every logical stage." });
+    } catch (error) {
+      toast.error("This query is outside the bounded visualizer", { description: error instanceof Error ? error.message : "Run it normally or simplify the query." });
+    }
+  };
+
   const canRun = status === "ready" && Boolean(activeDatabaseId) && Boolean(query.trim());
 
   return (
-    <section className="min-h-[330px] resize-y overflow-auto border-b border-border bg-card/25 md:h-[46vh] md:max-h-[68vh]">
-      <div className="flex h-10 items-center border-b border-border bg-card/50 px-4">
+    <section className={cn("min-h-[330px] overflow-auto border-b border-border bg-card/25", presentation ? "h-[42vh] min-h-[360px]" : "resize-y md:h-[46vh] md:max-h-[68vh]")}>
+      <div className={cn("flex items-center border-b border-border bg-card/50 px-4", presentation ? "h-12" : "h-10")}>
         <div className="flex h-full items-center gap-2 border-b-2 border-primary text-xs font-semibold">
           <FileCode2 className="size-3.5 text-primary" />
-          query.sql
+          {presentation ? "Teaching query.sql" : "query.sql"}
           <span className="size-1.5 rounded-full bg-emerald-500" />
         </div>
         <div className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -282,9 +319,9 @@ export function MonacoSqlEditor() {
         </div>
       </div>
 
-      <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-border px-3 py-2 sm:px-4">
+      <div className={cn("flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 sm:px-4", presentation ? "min-h-16" : "min-h-12")}>
         <Button
-          size="sm"
+          size={presentation ? "default" : "sm"}
           onClick={() => void executeQuery(editorRef.current?.getValue() ?? query)}
           disabled={!canRun || isQueryRunning}
         >
@@ -294,10 +331,14 @@ export function MonacoSqlEditor() {
         <span className="hidden items-center gap-1 rounded-md border border-border bg-muted/45 px-2 py-1 font-mono text-[9px] text-muted-foreground sm:inline-flex">
           <Keyboard className="size-3" /> Ctrl/⌘ Enter
         </span>
+        <Button variant="outline" size={presentation ? "default" : "sm"} onClick={() => void handleVisualize()} disabled={!canRun || isQueryRunning || isVisualizationLoading}>
+          {isVisualizationLoading ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
+          {isVisualizationLoading ? "Analyzing…" : "Visualize Query"}
+        </Button>
         <div className="h-5 w-px bg-border" />
         <Button
           variant="ghost"
-          size="sm"
+          size={presentation ? "default" : "sm"}
           onClick={handleFormat}
           disabled={!query.trim()}
           aria-label="Format SQL"
@@ -307,7 +348,7 @@ export function MonacoSqlEditor() {
         </Button>
         <Button
           variant="ghost"
-          size="sm"
+          size={presentation ? "default" : "sm"}
           onClick={() => {
             setQuery("");
             editorRef.current?.setValue("");
@@ -330,11 +371,11 @@ export function MonacoSqlEditor() {
               </>
             )}
           </span>
-          <PhaseNoticeDialog triggerLabel="Read-only" />
+          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"><ShieldCheck className="size-3" />Checkpoint protected</span>
         </div>
       </div>
 
-      <div className="h-[260px] min-h-[220px] md:h-[calc(100%-6rem)]">
+      <div className={cn("min-h-[220px]", presentation ? "h-[calc(100%-7rem)]" : "h-[260px] md:h-[calc(100%-6rem)]")}>
         <Editor
           height="100%"
           language="sql"
@@ -347,8 +388,8 @@ export function MonacoSqlEditor() {
           options={{
             automaticLayout: true,
             fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', monospace",
-            fontSize: 13,
-            lineHeight: 24,
+            fontSize: presentation ? 20 : 13,
+            lineHeight: presentation ? 34 : 24,
             lineNumbers: "on",
             lineNumbersMinChars: 3,
             minimap: { enabled: false },

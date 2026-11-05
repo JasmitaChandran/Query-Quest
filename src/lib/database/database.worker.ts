@@ -21,11 +21,13 @@ import type {
   TableRecords,
   TableSchema,
   TableSummary,
+  TableIndexSchema,
   TableDataEdit,
   TableDefinition,
 } from "@/lib/database/types";
 import { assertReadOnlyQuery } from "@/lib/database/read-only-sql";
 import { buildCreateTableSql, buildTableEditStatements } from "@/lib/database/visual-sql";
+import { inspectTableForMigration, migrateTableSchema } from "@/lib/database/schema-migration";
 
 const databases = new Map<string, Database>();
 let sqlJsPromise: Promise<SqlJsStatic> | null = null;
@@ -162,6 +164,7 @@ function getTableSchema(database: Database, tableName: string): TableSchema {
       notNull: Boolean(notNull),
       defaultValue: defaultValue as SqlValue,
       primaryKey: Boolean(primaryKey),
+      primaryKeyPosition: Number(primaryKey),
     }),
   );
 
@@ -181,6 +184,25 @@ function getTableSchema(database: Database, tableName: string): TableSchema {
     }),
   );
 
+  const indexResult = firstResult(
+    database.exec(`PRAGMA index_list(${quoteIdentifier(tableName)})`),
+  );
+  const indexes: TableIndexSchema[] = (indexResult?.values ?? []).map(
+    ([, name, unique, origin, partial]) => {
+      const indexName = String(name);
+      const indexColumns = firstResult(
+        database.exec(`PRAGMA index_info(${quoteIdentifier(indexName)})`),
+      );
+      return {
+        name: indexName,
+        unique: Boolean(unique),
+        origin: String(origin),
+        partial: Boolean(partial),
+        columns: (indexColumns?.values ?? []).map((row) => String(row[2])),
+      };
+    },
+  );
+
   const createStatement = database.prepare(
     "SELECT sql FROM sqlite_master WHERE name = ? AND type IN ('table', 'view') LIMIT 1",
   );
@@ -194,7 +216,7 @@ function getTableSchema(database: Database, tableName: string): TableSchema {
     createStatement.free();
   }
 
-  return { name: tableName, columns, foreignKeys, createSql };
+  return { name: tableName, columns, foreignKeys, indexes, createSql };
 }
 
 function getTableRecords(
@@ -340,6 +362,10 @@ async function handleRequest(request: DatabaseWorkerRequest): Promise<unknown> {
       );
     case "createTable":
       return createVisualTable(getDatabase(request.payload.databaseId), request.payload.definition);
+    case "inspectTableMigration":
+      return inspectTableForMigration(getDatabase(request.payload.databaseId), request.payload.tableName);
+    case "migrateTableSchema":
+      return migrateTableSchema(getDatabase(request.payload.databaseId), request.payload.input);
     case "getEditableTableRecords":
       return getEditableTableRecords(getDatabase(request.payload.databaseId), request.payload.tableName, request.payload.limit, request.payload.offset);
     case "applyTableEdits":

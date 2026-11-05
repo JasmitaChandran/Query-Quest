@@ -9,6 +9,9 @@ import type {
   TableSummary,
   TableDataEdit,
   TableDefinition,
+  TableMigrationInspection,
+  TableSchemaMigrationInput,
+  TableSchemaMigrationResult,
 } from "@/lib/database/types";
 
 export interface DatabaseWorkerRequestMap {
@@ -23,6 +26,8 @@ export interface DatabaseWorkerRequestMap {
     rows: import("@/lib/database/types").SqlValue[][];
   };
   createTable: { databaseId: string; definition: TableDefinition };
+  inspectTableMigration: { databaseId: string; tableName: string };
+  migrateTableSchema: { databaseId: string; input: TableSchemaMigrationInput };
   getEditableTableRecords: { databaseId: string; tableName: string; limit: number; offset: number };
   applyTableEdits: { databaseId: string; tableName: string; edits: TableDataEdit[] };
   listTables: { databaseId: string };
@@ -45,6 +50,8 @@ export interface DatabaseWorkerResponseMap {
   dropDatabase: { databaseId: string };
   importTable: { rowCount: number };
   createTable: { tableName: string };
+  inspectTableMigration: TableMigrationInspection;
+  migrateTableSchema: TableSchemaMigrationResult;
   getEditableTableRecords: EditableTableRecords;
   applyTableEdits: { changedRows: number };
   listTables: TableSummary[];

@@ -13,6 +13,7 @@ import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { QueryResult, SqlValue, TableRecords } from "@/lib/database/types";
+import { cn } from "@/lib/utils";
 
 type DataRow = {
   rowNumber: number;
@@ -30,9 +31,11 @@ function formatSqlValue(value: SqlValue) {
 export function DatabaseDataTable({
   result,
   label,
+  presentation = false,
 }: {
   result: QueryResult | TableRecords;
   label: string;
+  presentation?: boolean;
 }) {
   const [globalFilter, setGlobalFilter] = React.useState("");
   const data = React.useMemo<DataRow[]>(
@@ -76,8 +79,8 @@ export function DatabaseDataTable({
   const visibleRows = table.getRowModel().rows;
 
   return (
-    <div className="min-w-full">
-      <div className="sticky left-0 top-0 z-[3] flex h-10 min-w-full items-center gap-2 border-b border-border bg-card/95 px-3 backdrop-blur">
+    <div className={cn("min-w-full", presentation && "text-base")}>
+      <div className={cn("sticky left-0 top-0 z-[3] flex min-w-full items-center gap-2 border-b border-border bg-card/95 px-3 backdrop-blur", presentation ? "h-12" : "h-10")}>
         <Search className="size-3.5 text-muted-foreground" />
         <label className="sr-only" htmlFor={`${label}-search`}>
           Search {label}
@@ -87,7 +90,7 @@ export function DatabaseDataTable({
           value={globalFilter}
           onChange={(event) => setGlobalFilter(event.target.value)}
           placeholder={`Search ${label}…`}
-          className="h-7 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
+          className={cn("min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground/60", presentation ? "h-9 text-sm" : "h-7 text-xs")}
         />
         {globalFilter ? (
           <Button
@@ -106,7 +109,7 @@ export function DatabaseDataTable({
       </div>
 
       <Table className="min-w-max">
-        <TableHeader className="sticky top-10 z-[2] bg-card">
+        <TableHeader className={cn("sticky z-[2] bg-card", presentation ? "top-12" : "top-10")}>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="hover:bg-transparent">
               {headerGroup.headers.map((header, index) => (
@@ -115,7 +118,7 @@ export function DatabaseDataTable({
                   className={
                     index === 0
                       ? "w-12 border-r border-border/60 text-center"
-                      : "min-w-32 border-r border-border/50 last:border-r-0"
+                      : cn("border-r border-border/50 last:border-r-0", presentation ? "min-w-44 text-sm" : "min-w-32")
                   }
                 >
                   {header.isPlaceholder
@@ -138,7 +141,7 @@ export function DatabaseDataTable({
                       className={
                         index === 0
                           ? "border-r border-border/60 text-center text-[10px] tabular-nums text-muted-foreground"
-                          : "max-w-80 truncate border-r border-border/40 text-xs last:border-r-0"
+                          : cn("max-w-96 truncate border-r border-border/40 last:border-r-0", presentation ? "px-5 py-4 font-mono text-base" : "max-w-80 text-xs")
                       }
                       title={value === null ? "NULL" : String(value)}
                     >

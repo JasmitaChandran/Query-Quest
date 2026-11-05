@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -26,6 +27,20 @@
   --brand-blue: #4389ff;
   --primary-glow: rgba(124, 77, 255, 0.42);
 }
+
+@keyframes qq-row-order {
+  from { transform: translateY(var(--qq-row-shift, 0)); background-color: color-mix(in oklab, var(--primary) 16%, transparent); }
+  to { transform: translateY(0); }
+}
+
+.qq-order-row { animation: qq-row-order 650ms cubic-bezier(.22, 1, .36, 1) both; }
+
+@keyframes qq-row-combine {
+  from { opacity: 0; transform: translateX(18px) scale(.985); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.qq-combine-row { animation: qq-row-combine 480ms cubic-bezier(.22, 1, .36, 1) both; }
 
 .dark {
   --background: oklch(0.132 0.021 279);
@@ -119,6 +134,49 @@ body {
   border-radius: 999px;
   background: color-mix(in oklab, var(--muted-foreground) 28%, transparent);
   background-clip: padding-box;
+}
+
+.schema-flow {
+  --xy-background-color: #090c16;
+  --xy-edge-stroke: #818cf8;
+  --xy-edge-stroke-selected: #a78bfa;
+  --xy-controls-button-background-color: rgba(17, 21, 34, 0.96);
+  --xy-controls-button-background-color-hover: rgba(38, 43, 64, 0.98);
+  --xy-controls-button-color: #cbd5e1;
+  --xy-controls-button-color-hover: #ffffff;
+  --xy-controls-button-border-color: rgba(148, 163, 184, 0.16);
+  --xy-minimap-background-color: rgba(17, 21, 34, 0.94);
+}
+
+.schema-flow .react-flow__controls,
+.schema-flow .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.28);
+}
+
+.schema-flow .react-flow__node {
+  transition: opacity 180ms ease, filter 180ms ease;
+}
+
+.schema-flow .react-flow__edge-path {
+  transition: opacity 180ms ease, stroke-width 180ms ease;
+}
+
+.teaching-visualizer th {
+  height: 3rem;
+  padding-inline: 1.25rem;
+  font-size: 0.875rem;
+}
+
+.teaching-visualizer td {
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+}
+
+.teaching-visualizer .workspace-scrollbar {
+  max-height: 50vh;
 }
 
 @media (prefers-reduced-motion: no-preference) {
