@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { AlertTriangle, CheckCircle2, CircleAlert, Database, FileUp, Info, LoaderCircle, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, CircleAlert, FileUp, Info, LoaderCircle, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -39,7 +38,7 @@ function readFile(file: File, asText: boolean, onProgress: (value: number) => vo
   });
 }
 
-export function DropZone() {
+export function DropZone({ onImported, onCancel }: { onImported: () => void; onCancel: () => void }) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = React.useState(false);
   const [file, setFile] = React.useState<File | null>(null);
@@ -48,7 +47,6 @@ export function DropZone() {
   const [datasetTableName, setDatasetTableName] = React.useState("");
   const [progress, setProgress] = React.useState(0);
   const [parsing, setParsing] = React.useState(false);
-  const [success, setSuccess] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const databases = useDatabaseStore((state) => state.databases);
   const isImporting = useDatabaseStore((state) => state.isImporting);
@@ -58,13 +56,13 @@ export function DropZone() {
   const importDataset = useDatabaseStore((state) => state.importDataset);
 
   const reset = React.useCallback(() => {
-    setFile(null); setPrepared(null); setProgress(0); setError(null); setSuccess(false);
+    setFile(null); setPrepared(null); setProgress(0); setError(null);
     if (inputRef.current) inputRef.current.value = "";
   }, []);
 
   const stageFile = React.useCallback(async (next?: File) => {
     if (!next) return;
-    setError(null); setSuccess(false); setPrepared(null); setFile(next); setProgress(0);
+    setError(null); setPrepared(null); setFile(next); setProgress(0);
     const extension = next.name.split(".").pop()?.toLowerCase() ?? "";
     if (![...SQLITE_EXTENSIONS, "csv", "json", "sql"].includes(extension)) { setError("Unsupported file type. Choose .db, .sqlite, .sqlite3, .csv, .json, or a MySQL .sql dump."); return; }
     const max = SQLITE_EXTENSIONS.includes(extension) ? MAX_SQLITE : extension === "sql" ? MAX_MYSQL : MAX_DATASET;
@@ -101,7 +99,8 @@ export function DropZone() {
         if (!canImportMySqlDump(prepared.dump)) { setError("Resolve the reported MySQL conversion errors before importing."); return; }
         await importMySql(databaseName, prepared.dump);
       } else await importDataset({ databaseName, tableName: datasetTableName, columns: prepared.columns, rows: prepared.rows });
-      setSuccess(true); toast.success("Database imported", { description: "It is saved locally and ready in SQL Playground." });
+      toast.success("Database imported", { description: "It is saved locally, selected, and ready for SQL." });
+      onImported();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Import failed."); }
   };
 
@@ -114,12 +113,10 @@ export function DropZone() {
       : [];
   const duplicateName = databases.some((item) => item.name.toLowerCase() === databaseName.trim().toLowerCase());
 
-  if (success) return <div className="grid min-h-[360px] place-items-center rounded-2xl border border-emerald-500/25 bg-emerald-500/[.05] p-8 text-center"><div><CheckCircle2 className="mx-auto size-12 text-emerald-500" /><h2 className="mt-4 font-display text-2xl font-semibold">Import complete</h2><p className="mt-2 text-sm text-muted-foreground">{databaseName} is stored in this browser and selected.</p><div className="mt-6 flex justify-center gap-3"><Button variant="outline" onClick={reset}>Import another</Button><Button asChild><Link href="/playground"><Database />Open in SQL Playground</Link></Button></div></div></div>;
-
   return <div className="space-y-5">
     <input ref={inputRef} className="sr-only" type="file" accept=".db,.sqlite,.sqlite3,.csv,.json,.sql" onChange={(event) => void stageFile(event.target.files?.[0])} aria-label="Choose a database, MySQL dump, or dataset file" />
     {!prepared ? <div className={cn("relative flex min-h-[330px] flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-12 text-center transition", dragging ? "border-primary bg-primary/[.08]" : "border-border bg-muted/15 hover:border-primary/40")} onDragEnter={(event) => { event.preventDefault(); setDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); void stageFile(event.dataTransfer.files?.[0]); }}>
-      <div className="grid size-16 place-items-center rounded-2xl border border-primary/20 bg-primary/10 text-primary"><FileUp className="size-7" /></div><h2 className="mt-6 font-display text-2xl font-semibold">Drop your database or dataset here</h2><p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">SQLite databases, supported MySQL dumps, CSV files, and JSON arrays of objects are parsed entirely inside your browser.</p><Button className="mt-6" variant="outline" onClick={() => inputRef.current?.click()}><FileUp />Browse Files</Button><p className="mt-5 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="size-3.5 text-emerald-500" />Nothing is uploaded to a server</p>
+      <div className="grid size-16 place-items-center rounded-2xl border border-primary/20 bg-primary/10 text-primary"><FileUp className="size-7" /></div><h2 className="mt-6 font-display text-2xl font-semibold">Drop your database or dataset here</h2><p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">SQLite databases, supported MySQL dumps, CSV files, and JSON arrays of objects are parsed entirely inside your browser.</p><p className="mt-2 text-[11px] text-muted-foreground">SQLite up to 50 MB · MySQL SQL up to 25 MB · CSV or JSON up to 10 MB</p><Button className="mt-6" variant="outline" onClick={() => inputRef.current?.click()}><FileUp />Browse Files</Button><p className="mt-5 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="size-3.5 text-emerald-500" />Nothing is uploaded to a server</p>
     </div> : null}
     {file && !prepared ? <div className="rounded-xl border bg-card p-4"><div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{file.name}</p><p className="text-xs text-muted-foreground">{formatBytes(file.size)}</p></div><Button variant="ghost" size="icon-sm" onClick={reset} aria-label="Remove file"><X /></Button></div>{parsing ? <div className="mt-4"><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-[width]" style={{ width: `${progress}%` }} /></div><p className="mt-2 text-xs text-muted-foreground">Reading and inspecting… {progress}%</p></div> : null}</div> : null}
     {error ? <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</div> : null}
@@ -128,7 +125,8 @@ export function DropZone() {
       {duplicateName ? <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">A database with this display name exists. QueryQuest will create a separate database and will not overwrite it.</p> : null}
       {prepared.kind === "mysql" ? <div className="space-y-2"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold">Conversion report</p><span className="text-xs text-muted-foreground">{prepared.dump.issues.filter((issue) => issue.severity === "error").length} errors · {prepared.dump.issues.filter((issue) => issue.severity === "warning").length} warnings</span></div>{prepared.dump.issues.length ? <div className="max-h-64 space-y-2 overflow-auto rounded-xl border p-3">{prepared.dump.issues.map((issue, index) => <div key={`${issue.code}-${issue.statement ?? "all"}-${index}`} className={cn("flex gap-2 rounded-lg px-3 py-2 text-xs leading-5", issue.severity === "error" ? "bg-destructive/10 text-destructive" : issue.severity === "warning" ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : "bg-blue-500/10 text-blue-700 dark:text-blue-300")}>{issue.severity === "error" ? <CircleAlert className="mt-0.5 size-3.5 shrink-0" /> : issue.severity === "warning" ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> : <Info className="mt-0.5 size-3.5 shrink-0" />}<span>{issue.message}</span></div>)}</div> : <p className="rounded-xl border border-emerald-500/25 bg-emerald-500/[.06] p-3 text-xs text-emerald-700 dark:text-emerald-300">All detected statements are supported by the documented conversion subset.</p>}</div> : null}
       <div className="space-y-4">{previewTables.length ? previewTables.map((table) => <div key={table.name} className="overflow-hidden rounded-xl border"><div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-4 py-3"><p className="font-mono text-sm font-semibold">{table.name}</p><p className="text-xs text-muted-foreground">{table.columns.length} columns · {table.count} rows{table.indexes?.length ? ` · ${table.indexes.length} indexes` : ""}</p></div><div className="flex flex-wrap gap-2 border-b p-3">{table.columns.map((column) => <span key={column.name} className="rounded-md border bg-background px-2 py-1 font-mono text-[11px]">{column.name} <span className="text-primary">{column.type}</span></span>)}</div><div className="max-h-52 overflow-auto"><Table><TableHeader><TableRow>{table.headers.map((header) => <TableHead key={header} className="whitespace-nowrap font-mono text-xs">{header}</TableHead>)}</TableRow></TableHeader><TableBody>{table.rows.map((row, index) => <TableRow key={index}>{row.map((value, cell) => <TableCell key={cell} className="max-w-56 truncate font-mono text-xs">{value === null ? <span className="text-muted-foreground">NULL</span> : value instanceof Uint8Array ? `BLOB (${value.byteLength} bytes)` : String(value)}</TableCell>)}</TableRow>)}</TableBody></Table></div>{table.createSql ? <details className="border-t bg-muted/15"><summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-muted-foreground">Generated SQLite schema</summary><pre className="workspace-scrollbar max-h-52 overflow-auto border-t p-4 font-mono text-[11px] leading-5"><code>{table.createSql}</code></pre></details> : null}</div>) : <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">{prepared.kind === "mysql" ? "No convertible tables were found. Review the conversion errors above." : "This is a valid empty SQLite database with no user tables."}</p>}</div>
-      <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end"><Button variant="outline" onClick={reset} disabled={isImporting}>Cancel</Button><Button onClick={() => void confirmImport()} disabled={isImporting || (prepared.kind === "mysql" && !canImportMySqlDump(prepared.dump))}>{isImporting ? <LoaderCircle className="animate-spin" /> : <FileUp />}{isImporting ? "Importing atomically…" : prepared.kind === "mysql" ? "Convert & import" : "Confirm import"}</Button></div>
+      <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end"><Button variant="outline" onClick={onCancel} disabled={isImporting}>Cancel</Button><Button onClick={() => void confirmImport()} disabled={isImporting || (prepared.kind === "mysql" && !canImportMySqlDump(prepared.dump))}>{isImporting ? <LoaderCircle className="animate-spin" /> : <FileUp />}{isImporting ? "Importing atomically…" : prepared.kind === "mysql" ? "Convert & import" : "Confirm import"}</Button></div>
     </div> : null}
+    {!prepared ? <div className="flex justify-end border-t pt-4"><Button variant="outline" onClick={onCancel} disabled={parsing || isImporting}>Cancel</Button></div> : null}
   </div>;
 }

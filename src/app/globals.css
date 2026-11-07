@@ -115,10 +115,6 @@ body {
   mask-image: linear-gradient(to bottom, black 0%, transparent 80%);
 }
 
-.soft-noise {
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
-}
-
 .workspace-scrollbar {
   scrollbar-color: color-mix(in oklab, var(--muted-foreground) 35%, transparent) transparent;
   scrollbar-width: thin;
@@ -177,29 +173,4 @@ body {
 
 .teaching-visualizer .workspace-scrollbar {
   max-height: 50vh;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .reveal {
-    animation: reveal 700ms cubic-bezier(.2,.8,.2,1) both;
-  }
-
-  .reveal-delay-1 {
-    animation-delay: 100ms;
-  }
-
-  .reveal-delay-2 {
-    animation-delay: 200ms;
-  }
-}
-
-@keyframes reveal {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { Database, LoaderCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,7 +17,6 @@ import {
 import { useDatabaseStore } from "@/store/database-store";
 
 export function CreateDatabaseDialog({ compact = false }: { compact?: boolean }) {
-  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const createDatabase = useDatabaseStore((state) => state.createDatabase);
@@ -33,7 +31,6 @@ export function CreateDatabaseDialog({ compact = false }: { compact?: boolean })
       });
       setOpen(false);
       setName("");
-      router.push("/playground");
     } catch (error) {
       toast.error("Could not create database", {
         description: error instanceof Error ? error.message : "Try another database name.",

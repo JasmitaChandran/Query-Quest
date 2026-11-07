@@ -8,11 +8,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "QueryQuest — Learn SQL visually",
+    default: "QueryQuest — SQL Playground",
     template: "%s — QueryQuest",
   },
   description:
-    "An interactive SQL teaching and visualization workspace built to make every query easier to understand.",
+    "A browser-native SQL playground for exploring databases, visualizing queries, and teaching SQL.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

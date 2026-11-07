@@ -10,7 +10,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). QueryQuest opens directly into the SQL Playground.
 
 ## Quality checks
 
@@ -23,9 +23,9 @@ npm run build
 
 ## Routes
 
-- `/` — product landing page
-- `/import` — import SQLite/SQL files or create independent logical databases
-- `/playground` — Monaco SQL IDE with live schema, source records, and searchable query results
+- `/` — Monaco SQL IDE with live schema, inline database import, source records, and searchable query results
+- `/import` — redirects to `/` for backward compatibility
+- `/playground` — redirects to `/` for backward compatibility
 
 ## Browser database architecture
 

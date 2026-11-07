@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
   AlertCircle,
@@ -14,7 +13,6 @@ import {
   FileDatabase,
   HardDrive,
   History,
-  Import,
   Info,
   KeyRound,
   LockKeyhole,
@@ -38,6 +36,7 @@ import { DatabaseDataTable } from "@/components/playground/database-data-table";
 import { VisualDataEditor } from "@/components/playground/visual-data-editor";
 import { TableDesignerDialog } from "@/components/playground/table-designer-dialog";
 import { CreateDatabaseDialog } from "@/components/import/create-database-dialog";
+import { ImportDatabaseDialog } from "@/components/import/import-database-dialog";
 import { QueryHistoryPanel } from "@/components/playground/query-history-panel";
 import { SaveResultDialog } from "@/components/playground/save-result-dialog";
 import { QueryVisualizer } from "@/components/playground/query-visualizer";
@@ -139,13 +138,10 @@ function ExplorerSidebar() {
       {!explorerCollapsed ? (
         <div className="flex min-h-[calc(100%-3rem)] flex-col">
           <div className="border-b border-border p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[9px] font-bold uppercase tracking-[.16em] text-muted-foreground/70">Databases</p>
-              <Button asChild variant="outline" size="icon-sm" title="Import or create database">
-                <Link href="/import" aria-label="Import or create database">
-                  <Import />
-                </Link>
-              </Button>
+            <p className="text-[9px] font-bold uppercase tracking-[.16em] text-muted-foreground/70">Databases</p>
+            <div className="mt-2 grid gap-2 [&_button]:w-full">
+              <ImportDatabaseDialog />
+              <CreateDatabaseDialog />
             </div>
             <div className="workspace-scrollbar mt-2 max-h-36 space-y-1 overflow-y-auto rounded-xl border border-border bg-background/35 p-1.5">
               {databases.length ? databases.map((database) => {
@@ -158,16 +154,13 @@ function ExplorerSidebar() {
                   </button>
                   <DatabaseActionsMenu database={database} />
                 </div>;
-              }) : <p className="px-2 py-3 text-center text-[11px] text-muted-foreground">No databases in this browser.</p>}
+              }) : <p className="px-2 py-3 text-center text-[11px] text-muted-foreground">No databases yet.</p>}
             </div>
             <div className="mt-2 flex h-8 items-center gap-2 rounded-lg border border-border bg-background/40 px-2.5 text-muted-foreground">
               <Search className="size-3.5" />
               <span className="text-[11px]">{activeDatabaseId ? `${tables.length} tables and views` : "Select or create a database"}</span>
             </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <CreateDatabaseDialog />
-              {activeDatabaseId ? <TableDesignerDialog /> : null}
-            </div>
+            {activeDatabaseId ? <div className="mt-2"><TableDesignerDialog /></div> : null}
           </div>
 
           {status === "initializing" || status === "idle" ? (
@@ -175,9 +168,9 @@ function ExplorerSidebar() {
           ) : databases.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center px-5 py-7 text-center">
               <div className="grid size-11 place-items-center rounded-2xl border border-border bg-muted/45 text-muted-foreground"><Database className="size-5" /></div>
-              <p className="mt-4 text-sm font-semibold">No databases yet</p>
+              <p className="mt-4 text-sm font-semibold">No databases yet.</p>
               <p className="mt-1.5 text-xs leading-5 text-muted-foreground">Create an empty SQLite database or import one stored on your device.</p>
-              <div className="mt-4 flex flex-wrap justify-center gap-2"><CreateDatabaseDialog /><Button asChild variant="outline" size="sm"><Link href="/import"><Import />Import Database</Link></Button></div>
+              <div className="mt-4 grid w-full max-w-64 grid-cols-1 gap-2 [&_button]:w-full"><ImportDatabaseDialog /><CreateDatabaseDialog /></div>
             </div>
           ) : tables.length > 0 ? (
             <div className="flex-1 p-2">
