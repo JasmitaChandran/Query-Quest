@@ -1,0 +1,48 @@
+services:
+  schema-analysis:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    environment:
+      SERVICE: schema-analysis
+      PORT: "4101"
+      LOG_LEVEL: info
+    ports:
+      - "4101:4101"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4101/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  query-visualization:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    environment:
+      SERVICE: query-visualization
+      PORT: "4102"
+      LOG_LEVEL: info
+    ports:
+      - "4102:4102"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4102/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  lesson-dataset:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    environment:
+      SERVICE: lesson-dataset
+      PORT: "4103"
+      LOG_LEVEL: info
+    ports:
+      - "4103:4103"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4103/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
