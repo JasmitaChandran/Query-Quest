@@ -19,6 +19,7 @@ import {
   useNodesState,
 } from "@xyflow/react";
 import { toPng, toSvg } from "html-to-image";
+import { useTheme } from "next-themes";
 import {
   AlertCircle,
   Download,
@@ -61,23 +62,23 @@ const nodeTypes = { schemaTable: SchemaTableNodeView };
 function SchemaTableNodeView({ data }: NodeProps<SchemaTableNode>) {
   const foreignColumns = new Set(data.schema.foreignKeys.map((foreignKey) => foreignKey.fromColumn.toLowerCase()));
   return <div className={cn(
-    "w-[282px] overflow-hidden rounded-2xl border bg-[#111522]/96 text-slate-100 shadow-[0_18px_60px_rgba(0,0,0,.28)] transition-all duration-200",
-    data.emphasis === "active" && "border-violet-400 shadow-[0_0_0_2px_rgba(139,92,246,.2),0_20px_65px_rgba(76,29,149,.32)]",
-    data.emphasis === "related" && "border-blue-400/70 shadow-[0_0_0_1px_rgba(59,130,246,.18),0_18px_55px_rgba(30,64,175,.24)]",
-    data.emphasis === "dimmed" && "scale-[.985] opacity-35",
+    "w-[282px] overflow-hidden rounded-xl border bg-diagram-node text-diagram-text shadow-[var(--diagram-shadow)] transition-all duration-200",
+    data.emphasis === "active" && "border-primary ring-2 ring-primary/25",
+    data.emphasis === "related" && "border-info ring-1 ring-info/25",
+    data.emphasis === "dimmed" && "scale-[.99] opacity-65",
   )}>
-    <Handle type="target" position={Position.Left} isConnectable={false} className="!size-2.5 !border-2 !border-[#111522] !bg-blue-400" />
-    <Handle type="source" position={Position.Right} isConnectable={false} className="!size-2.5 !border-2 !border-[#111522] !bg-violet-400" />
-    <div className="flex items-center gap-2 border-b border-white/10 bg-gradient-to-r from-violet-500/18 to-blue-500/10 px-3.5 py-3">
-      <div className="grid size-7 place-items-center rounded-lg border border-violet-400/20 bg-violet-400/10 text-violet-300"><Table2 className="size-3.5" /></div>
-      <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold tracking-tight">{data.table.name}</p><p className="mt-0.5 text-[9px] text-slate-400">{data.table.rowCount} {data.table.rowCount === 1 ? "row" : "rows"} · {data.schema.columns.length} columns</p></div>
-      <button type="button" className="nodrag rounded-lg border border-white/10 bg-white/5 p-1.5 text-slate-400 transition hover:border-violet-400/40 hover:bg-violet-400/10 hover:text-violet-300" onClick={(event) => { event.stopPropagation(); data.onEdit(data.table.name); }} aria-label={`Edit schema for ${data.table.name}`} title="Edit schema"><FileCode2 className="size-3.5" /></button>
+    <Handle type="target" position={Position.Left} isConnectable={false} className="!size-2.5 !border-2 !border-diagram-node !bg-info" />
+    <Handle type="source" position={Position.Right} isConnectable={false} className="!size-2.5 !border-2 !border-diagram-node !bg-primary" />
+    <div className="flex items-center gap-2 border-b border-border bg-diagram-node-header px-3.5 py-3">
+      <div className="grid size-7 place-items-center rounded-lg border border-primary/20 bg-selected text-selected-foreground"><Table2 className="size-3.5" /></div>
+      <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold tracking-tight">{data.table.name}</p><p className="mt-0.5 text-xs text-diagram-muted">{data.table.rowCount} {data.table.rowCount === 1 ? "row" : "rows"} · {data.schema.columns.length} columns</p></div>
+      <button type="button" className="nodrag rounded-lg border border-border bg-surface p-1.5 text-diagram-muted transition hover:border-primary/40 hover:bg-selected hover:text-selected-foreground" onClick={(event) => { event.stopPropagation(); data.onEdit(data.table.name); }} aria-label={`Edit schema for ${data.table.name}`} title="Edit schema"><FileCode2 className="size-3.5" /></button>
     </div>
     <div className="max-h-[252px] overflow-y-auto py-1.5 workspace-scrollbar">{data.schema.columns.map((column) => {
       const foreign = foreignColumns.has(column.name.toLowerCase());
-      return <div key={column.name} className={cn("flex min-h-8 items-center gap-2 px-3.5 py-1 text-[10px]", foreign && "bg-blue-500/[.055]")}>
-        <span className="flex w-8 shrink-0 items-center gap-1">{column.primaryKey ? <KeyRound className="size-3 text-amber-400" aria-label="Primary key" /> : null}{foreign ? <GitFork className="size-3 text-blue-400" aria-label="Foreign key" /> : null}{!column.primaryKey && !foreign ? <span className="ml-1 size-1 rounded-full bg-slate-600" /> : null}</span>
-        <span className="min-w-0 flex-1 truncate font-medium text-slate-200">{column.name}</span><span className="max-w-24 truncate font-mono text-[9px] text-slate-500">{column.type}</span>
+      return <div key={column.name} className={cn("flex min-h-8 items-center gap-2 px-3.5 py-1 text-xs", foreign && "bg-info-tint")}>
+        <span className="flex w-8 shrink-0 items-center gap-1">{column.primaryKey ? <KeyRound className="size-3 text-warning" aria-label="Primary key" /> : null}{foreign ? <GitFork className="size-3 text-info" aria-label="Foreign key" /> : null}{!column.primaryKey && !foreign ? <span className="ml-1 size-1 rounded-full bg-diagram-muted" /> : null}</span>
+        <span className="min-w-0 flex-1 truncate font-medium text-diagram-text">{column.name}</span><span className="max-w-24 truncate font-mono text-xs text-diagram-muted">{column.type}</span>
       </div>;
     })}</div>
   </div>;
@@ -104,12 +105,12 @@ function buildEdges(relationships: SchemaRelationship[]): Edge[] {
     target: relationship.childTable,
     type: "smoothstep",
     label: relationship.cardinality === "one-to-many" ? "1 → N" : "1 → 1",
-    labelStyle: { fill: "#b9c1d6", fontSize: 10, fontWeight: 700 },
-    labelBgStyle: { fill: "#111522", fillOpacity: 0.94 },
+    labelStyle: { fill: "var(--diagram-text)", fontSize: 11, fontWeight: 700 },
+    labelBgStyle: { fill: "var(--diagram-node)", fillOpacity: 0.96 },
     labelBgPadding: [6, 3],
     labelBgBorderRadius: 6,
-    markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: "#818cf8" },
-    style: { stroke: "#818cf8", strokeWidth: 1.6 },
+    markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: "var(--diagram-edge)" },
+    style: { stroke: "var(--diagram-edge)", strokeWidth: 1.6 },
   }));
 }
 
@@ -122,11 +123,11 @@ function downloadDataUrl(dataUrl: string, fileName: string) {
 
 function RelationshipList({ tableName, relationships }: { tableName: string; relationships: SchemaRelationship[] }) {
   const relevant = relationships.filter((relationship) => relationship.parentTable === tableName || relationship.childTable === tableName);
-  if (!relevant.length) return <p className="rounded-xl border border-dashed p-3 text-[10px] leading-4 text-muted-foreground">No declared foreign-key relationships touch this table.</p>;
+  if (!relevant.length) return <p className="rounded-xl border border-dashed p-3 text-xs leading-4 text-muted-foreground">No declared foreign-key relationships touch this table.</p>;
   return <div className="space-y-2">{relevant.map((relationship) => {
     const outgoing = relationship.childTable === tableName;
     const otherTable = outgoing ? relationship.parentTable : relationship.childTable;
-    return <div key={relationship.id} className="rounded-xl border bg-background/35 p-3"><div className="flex items-center gap-2"><Link2 className="size-3.5 text-blue-500" /><span className="min-w-0 flex-1 truncate text-[11px] font-semibold">{outgoing ? "References" : "Referenced by"} {otherTable}</span><span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[8px] font-bold text-violet-500">{relationship.cardinality === "one-to-many" ? "1:N" : "1:1"}</span></div><p className="mt-1.5 truncate font-mono text-[9px] text-muted-foreground">{outgoing ? relationship.childColumns.join(", ") : relationship.parentColumns.join(", ")} → {outgoing ? relationship.parentColumns.join(", ") : relationship.childColumns.join(", ")}</p></div>;
+    return <div key={relationship.id} className="rounded-xl border bg-surface p-3"><div className="flex items-center gap-2"><Link2 className="size-3.5 text-info" /><span className="min-w-0 flex-1 truncate text-xs font-semibold">{outgoing ? "References" : "Referenced by"} {otherTable}</span><span className="rounded-full bg-selected px-2 py-0.5 text-xs font-bold text-selected-foreground">{relationship.cardinality === "one-to-many" ? "1:N" : "1:1"}</span></div><p className="mt-1.5 truncate font-mono text-xs text-muted-foreground">{outgoing ? relationship.childColumns.join(", ") : relationship.parentColumns.join(", ")} → {outgoing ? relationship.parentColumns.join(", ") : relationship.childColumns.join(", ")}</p></div>;
   })}</div>;
 }
 
@@ -139,6 +140,7 @@ function SchemaDiagramCanvas({ databaseId, databaseName, tables, schemas, initia
   relationships: SchemaRelationship[];
   onPositionsChange: (positions: DiagramPositions) => void;
 }) {
+  const { resolvedTheme } = useTheme();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const flowRef = React.useRef<ReactFlowInstance<SchemaTableNode, Edge> | null>(null);
   const selectedTableFromStore = useDatabaseStore((state) => state.selectedTable);
@@ -164,7 +166,7 @@ function SchemaDiagramCanvas({ databaseId, databaseName, tables, schemas, initia
   } satisfies SchemaTableNode)), [focusTable, nodes, relatedTables]);
   const displayedEdges = React.useMemo(() => baseEdges.map((edge) => {
     const active = Boolean(focusTable && (edge.source === focusTable || edge.target === focusTable));
-    return { ...edge, animated: active, style: { ...edge.style, opacity: focusTable && !active ? 0.16 : 1, strokeWidth: active ? 2.5 : 1.6 } };
+    return { ...edge, animated: active, style: { ...edge.style, opacity: focusTable && !active ? 0.36 : 1, strokeWidth: active ? 2.5 : 1.6 } };
   }), [baseEdges, focusTable]);
   const selectedSchema = selectedTable ? schemas[selectedTable] : null;
 
@@ -192,8 +194,9 @@ function SchemaDiagramCanvas({ databaseId, databaseName, tables, schemas, initia
       const width = Math.max(900, Math.ceil(bounds.width + 160));
       const height = Math.max(620, Math.ceil(bounds.height + 160));
       const transform = getViewportForBounds(bounds, width, height, 0.5, 2, 0.12);
+      const backgroundColor = getComputedStyle(document.documentElement).getPropertyValue("--diagram-canvas").trim();
       const options = {
-        backgroundColor: "#090c16",
+        backgroundColor,
         width,
         height,
         style: {
@@ -214,13 +217,13 @@ function SchemaDiagramCanvas({ databaseId, databaseName, tables, schemas, initia
     }
   };
 
-  return <div className="grid min-h-[620px] flex-1 bg-[#090c16] lg:grid-cols-[minmax(0,1fr)_320px]">
+  return <div className="grid min-h-[620px] flex-1 bg-diagram-canvas lg:grid-cols-[minmax(0,1fr)_320px]">
     <div ref={containerRef} className="relative min-h-[620px] overflow-hidden border-b border-border lg:border-b-0 lg:border-r">
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-2 bg-gradient-to-b from-[#090c16] via-[#090c16]/90 to-transparent px-4 pb-9 pt-4">
-        <div className="pointer-events-auto mr-auto"><p className="flex items-center gap-2 text-xs font-semibold text-slate-100"><Network className="size-4 text-violet-400" />{databaseName} schema</p><p className="mt-1 text-[10px] text-slate-500">{nodes.length} tables · {relationships.length} declared relationships</p></div>
-        <Button className="pointer-events-auto border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" variant="outline" size="sm" onClick={resetLayout}><RefreshCcw />Reset layout</Button>
-        <Button className="pointer-events-auto border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" variant="outline" size="sm" onClick={() => void exportDiagram("svg")} disabled={Boolean(isExporting)}>{isExporting === "svg" ? <LoaderCircle className="animate-spin" /> : <Download />}SVG</Button>
-        <Button className="pointer-events-auto border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" variant="outline" size="sm" onClick={() => void exportDiagram("png")} disabled={Boolean(isExporting)}>{isExporting === "png" ? <LoaderCircle className="animate-spin" /> : <ImageDown />}PNG</Button>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-2 bg-gradient-to-b from-diagram-canvas via-diagram-canvas/90 to-transparent px-4 pb-9 pt-4">
+        <div className="pointer-events-auto mr-auto"><p className="flex items-center gap-2 text-xs font-semibold text-diagram-text"><Network className="size-4 text-primary" />{databaseName} schema</p><p className="mt-1 text-xs text-diagram-muted">{nodes.length} tables · {relationships.length} declared relationships</p></div>
+        <Button className="pointer-events-auto border-border bg-surface text-foreground hover:bg-hover" variant="outline" size="sm" onClick={resetLayout}><RefreshCcw />Reset layout</Button>
+        <Button className="pointer-events-auto border-border bg-surface text-foreground hover:bg-hover" variant="outline" size="sm" onClick={() => void exportDiagram("svg")} disabled={Boolean(isExporting)}>{isExporting === "svg" ? <LoaderCircle className="animate-spin" /> : <Download />}SVG</Button>
+        <Button className="pointer-events-auto border-border bg-surface text-foreground hover:bg-hover" variant="outline" size="sm" onClick={() => void exportDiagram("png")} disabled={Boolean(isExporting)}>{isExporting === "png" ? <LoaderCircle className="animate-spin" /> : <ImageDown />}PNG</Button>
       </div>
       <ReactFlow<SchemaTableNode, Edge>
         nodes={displayedNodes}
@@ -243,26 +246,26 @@ function SchemaDiagramCanvas({ databaseId, databaseName, tables, schemas, initia
         fitViewOptions={{ padding: "14%", minZoom: 0.45, maxZoom: 1.2 }}
         minZoom={0.25}
         maxZoom={1.8}
-        colorMode="dark"
+        colorMode={resolvedTheme === "light" ? "light" : "dark"}
         className="schema-flow"
         proOptions={{ hideAttribution: false }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={22} size={1.15} color="#2b3146" />
+        <Background variant={BackgroundVariant.Dots} gap={22} size={1.15} color="var(--diagram-grid)" />
         <Controls position="bottom-left" showInteractive={false} fitViewOptions={{ padding: "12%" }} />
-        <MiniMap position="bottom-right" pannable zoomable nodeColor={(node) => node.id === focusTable ? "#8b5cf6" : relatedTables.has(node.id) ? "#4389ff" : "#30374d"} maskColor="rgba(5,8,17,.72)" />
+        <MiniMap position="bottom-right" pannable zoomable nodeColor={(node) => node.id === focusTable ? "var(--diagram-edge-selected)" : relatedTables.has(node.id) ? "var(--diagram-edge)" : "var(--diagram-neutral)"} maskColor="var(--diagram-minimap-mask)" />
       </ReactFlow>
-      {!relationships.length ? <div className="pointer-events-none absolute bottom-5 left-1/2 z-10 w-[min(90%,480px)] -translate-x-1/2 rounded-xl border border-blue-400/20 bg-[#111522]/92 p-3 text-center text-[10px] leading-4 text-slate-400 shadow-xl backdrop-blur"><AlertCircle className="mr-1.5 inline size-3.5 text-blue-400" />No foreign keys are defined. Tables are shown independently; QueryQuest does not infer relationships from matching names.</div> : null}
+      {!relationships.length ? <div className="pointer-events-none absolute bottom-5 left-1/2 z-10 w-[min(90%,480px)] -translate-x-1/2 rounded-xl border border-info/25 bg-diagram-node/95 p-3 text-center text-xs leading-4 text-diagram-muted shadow-xl backdrop-blur"><AlertCircle className="mr-1.5 inline size-3.5 text-info" />No foreign keys are defined. Tables are shown independently; QueryQuest does not infer relationships from matching names.</div> : null}
     </div>
 
-    <aside className="workspace-scrollbar max-h-[620px] overflow-y-auto bg-card/95 p-4 lg:max-h-none">
+    <aside className="workspace-scrollbar max-h-[620px] overflow-y-auto bg-surface-elevated p-4 lg:max-h-none">
       {selectedSchema && selectedTable ? <div className="space-y-5">
-        <div><p className="text-[9px] font-bold uppercase tracking-[.16em] text-muted-foreground">Selected table</p><div className="mt-2 flex items-center gap-2"><div className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary"><Table2 className="size-4" /></div><div className="min-w-0"><p className="truncate text-sm font-semibold">{selectedTable}</p><p className="text-[10px] text-muted-foreground">{selectedSchema.columns.length} columns</p></div></div></div>
+        <div><p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Selected table</p><div className="mt-2 flex items-center gap-2"><div className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary"><Table2 className="size-4" /></div><div className="min-w-0"><p className="truncate text-sm font-semibold">{selectedTable}</p><p className="text-xs text-muted-foreground">{selectedSchema.columns.length} columns</p></div></div></div>
         <Button className="w-full" size="sm" onClick={() => setSchemaEditorTable(selectedTable)}><FileCode2 />Edit schema</Button>
-        <section><p className="mb-2 text-[10px] font-semibold uppercase tracking-[.12em] text-muted-foreground">Columns</p><div className="space-y-1.5">{selectedSchema.columns.map((column) => {
+        <section><p className="mb-2 text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">Columns</p><div className="space-y-1.5">{selectedSchema.columns.map((column) => {
           const foreign = selectedSchema.foreignKeys.some((foreignKey) => foreignKey.fromColumn === column.name);
-          return <div key={column.name} className="flex items-center gap-2 rounded-lg border bg-background/35 px-2.5 py-2 text-[10px]">{column.primaryKey ? <KeyRound className="size-3 text-amber-500" /> : foreign ? <GitFork className="size-3 text-blue-500" /> : <span className="size-3" />}<span className="min-w-0 flex-1 truncate font-medium">{column.name}</span><span className="font-mono text-[9px] text-muted-foreground">{column.type}</span></div>;
+          return <div key={column.name} className="flex items-center gap-2 rounded-lg border bg-surface px-2.5 py-2 text-xs">{column.primaryKey ? <KeyRound className="size-3 text-warning" /> : foreign ? <GitFork className="size-3 text-info" /> : <span className="size-3" />}<span className="min-w-0 flex-1 truncate font-medium">{column.name}</span><span className="font-mono text-xs text-muted-foreground">{column.type}</span></div>;
         })}</div></section>
-        <section><p className="mb-2 text-[10px] font-semibold uppercase tracking-[.12em] text-muted-foreground">Relationships</p><RelationshipList tableName={selectedTable} relationships={relationships} /></section>
+        <section><p className="mb-2 text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">Relationships</p><RelationshipList tableName={selectedTable} relationships={relationships} /></section>
       </div> : <div className="flex min-h-72 flex-col items-center justify-center text-center"><div className="grid size-12 place-items-center rounded-2xl border bg-muted/30 text-muted-foreground"><Network className="size-5" /></div><p className="mt-4 text-sm font-semibold">Select a table</p><p className="mt-1.5 max-w-56 text-xs leading-5 text-muted-foreground">Click a node to inspect its columns, relationships, and schema actions.</p></div>}
     </aside>
     <TableSchemaEditorDialog tableName={schemaEditorTable} open={Boolean(schemaEditorTable)} onOpenChange={(nextOpen) => { if (!nextOpen) setSchemaEditorTable(null); }} />

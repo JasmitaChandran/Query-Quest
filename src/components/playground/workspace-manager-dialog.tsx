@@ -127,8 +127,8 @@ export function WorkspaceManagerDialog() {
 
   return <Dialog open={open} onOpenChange={setOpen}>
     <DialogTrigger asChild>
-      <Button variant="outline" size="sm" className="max-w-52 justify-start border-violet-500/25 bg-violet-500/[.06]" title="Manage workspaces">
-        <FolderKanban className="text-violet-500" />
+      <Button variant="outline" size="sm" className="max-w-52 justify-start border-primary/25 bg-selected" title="Manage workspaces">
+        <FolderKanban className="text-primary" />
         <span className="truncate">{activeWorkspace?.name ?? "Workspace"}</span>
       </Button>
     </DialogTrigger>
@@ -144,16 +144,16 @@ export function WorkspaceManagerDialog() {
           <div className="space-y-2">
             {workspaces.map((workspace) => {
               const active = workspace.id === activeWorkspaceId;
-              return <div key={workspace.id} className={cn("rounded-xl border p-3 transition", active ? "border-violet-500/40 bg-violet-500/[.06]" : "bg-card/50")}>
+              return <div key={workspace.id} className={cn("rounded-xl border p-3 transition", active ? "border-primary/40 bg-selected" : "bg-surface")}>
                 {renamingId === workspace.id ? <form onSubmit={(event) => void handleRename(event)} className="flex gap-2">
                   <label className="sr-only" htmlFor={`workspace-rename-${workspace.id}`}>Workspace name</label>
-                  <input id={`workspace-rename-${workspace.id}`} autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  <input id={`workspace-rename-${workspace.id}`} autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} className="ui-input min-w-0 flex-1" />
                   <Button size="sm" disabled={!renameValue.trim() || isMutating}><Check />Save</Button>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setRenamingId(null)}>Cancel</Button>
                 </form> : <div className="flex items-center gap-2">
                   <button type="button" disabled={active || isMutating} onClick={() => void switchWorkspace(workspace.id).then(() => toast.success(`Switched to “${workspace.name}”`)).catch((error) => toast.error("Could not switch workspace", { description: error instanceof Error ? error.message : "Try again." }))} className="min-w-0 flex-1 text-left disabled:cursor-default">
-                    <span className="flex items-center gap-2 text-sm font-semibold"><FolderKanban className="size-4 text-violet-500" /><span className="truncate">{workspace.name}</span>{active ? <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[9px] uppercase tracking-wide text-violet-600 dark:text-violet-300">Active</span> : null}</span>
-                    <span className="mt-1 block text-[10px] text-muted-foreground">Updated {new Date(workspace.updatedAt).toLocaleString()}</span>
+                    <span className="flex items-center gap-2 text-sm font-semibold"><FolderKanban className="size-4 text-primary" /><span className="truncate">{workspace.name}</span>{active ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs uppercase tracking-wide text-selected-foreground">Active</span> : null}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">Updated {new Date(workspace.updatedAt).toLocaleString()}</span>
                   </button>
                   <Button variant="ghost" size="icon-sm" onClick={() => { setRenamingId(workspace.id); setRenameValue(workspace.name); }} title={`Rename ${workspace.name}`} aria-label={`Rename ${workspace.name}`}><Pencil /></Button>
                   <Button variant="ghost" size="icon-sm" className="text-destructive hover:text-destructive" onClick={() => { setDeletingId(workspace.id); setConfirmation(""); }} title={`Delete ${workspace.name}`} aria-label={`Delete ${workspace.name}`}><Trash2 /></Button>
@@ -163,23 +163,23 @@ export function WorkspaceManagerDialog() {
           </div>
           <form onSubmit={(event) => void handleCreate(event)} className="mt-3 flex gap-2 rounded-xl border border-dashed p-3">
             <label className="sr-only" htmlFor="new-workspace-name">New workspace name</label>
-            <input id="new-workspace-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="New workspace name" className="h-9 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+            <input id="new-workspace-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="New workspace name" className="ui-input min-w-0 flex-1" />
             <Button size="sm" disabled={!newName.trim() || isMutating}><Plus />Create</Button>
           </form>
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-2xl border bg-card/60 p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold"><HardDrive className="size-4 text-blue-500" />Browser storage</div>
+          <div className="rounded-xl border bg-card/60 p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold"><HardDrive className="size-4 text-info" />Browser storage</div>
             <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
               <div className="rounded-xl bg-muted/45 p-3"><span className="block text-muted-foreground">Databases</span><strong className="mt-1 block">{databases.length} · {formatBytes(usage?.databaseBytes ?? 0)}</strong></div>
               <div className="rounded-xl bg-muted/45 p-3"><span className="block text-muted-foreground">Checkpoints</span><strong className="mt-1 block">{formatBytes(usage?.checkpointBytes ?? 0)}</strong></div>
               <div className="col-span-2 rounded-xl bg-muted/45 p-3"><span className="block text-muted-foreground">Workspace total</span><strong className="mt-1 block text-base">{formatBytes(usage?.totalBytes ?? 0)}</strong></div>
             </div>
           </div>
-          <div className="rounded-2xl border bg-card/60 p-4">
+          <div className="rounded-xl border bg-card/60 p-4">
             <p className="text-sm font-semibold">Portable workspace</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">Export a versioned JSON bundle containing complete SQLite files and workspace metadata. Import validates every database before replacing existing data.</p>
+            <p className="mt-1 text-[13px] leading-5 text-muted-foreground">Export a versioned JSON bundle containing complete SQLite files and workspace metadata. Import validates every database before replacing existing data.</p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               <Button variant="outline" onClick={() => void handleExport()} disabled={isMutating}><Download />Export Workspace</Button>
               <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={isMutating}><Upload />Import Workspace</Button>
@@ -189,18 +189,18 @@ export function WorkspaceManagerDialog() {
         </div>
       </div>
 
-      {deletingWorkspace ? <div className="rounded-2xl border border-destructive/30 bg-destructive/[.06] p-4" role="alertdialog" aria-labelledby="delete-workspace-title">
-        <div className="flex items-start gap-3"><div className="grid size-9 shrink-0 place-items-center rounded-xl bg-destructive/10 text-destructive"><Trash2 className="size-4" /></div><div><p id="delete-workspace-title" className="text-sm font-semibold">Delete “{deletingWorkspace.name}”?</p><p className="mt-1 text-xs leading-5 text-muted-foreground">This permanently removes its databases and records, saved queries, history, checkpoints, diagram positions, and settings. Other workspaces are not affected.</p></div></div>
+      {deletingWorkspace ? <div className="rounded-xl border border-destructive/30 bg-destructive/[.06] p-4" role="alertdialog" aria-labelledby="delete-workspace-title">
+        <div className="flex items-start gap-3"><div className="grid size-9 shrink-0 place-items-center rounded-xl bg-destructive-tint text-destructive"><Trash2 className="size-4" /></div><div><p id="delete-workspace-title" className="text-sm font-semibold">Delete “{deletingWorkspace.name}”?</p><p className="mt-1 text-xs leading-5 text-muted-foreground">This permanently removes its databases and records, saved queries, history, checkpoints, diagram positions, and settings. Other workspaces are not affected.</p></div></div>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <label className="sr-only" htmlFor="workspace-delete-confirmation">Type workspace name to confirm</label>
-          <input id="workspace-delete-confirmation" autoFocus value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={`Type ${deletingWorkspace.name} to confirm`} className="h-9 min-w-0 flex-1 rounded-lg border border-destructive/30 bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-destructive/20" />
+          <input id="workspace-delete-confirmation" autoFocus value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={`Type ${deletingWorkspace.name} to confirm`} className="ui-input min-w-0 flex-1 border-destructive/35 focus-visible:border-destructive" />
           <Button variant="destructive" disabled={confirmation !== deletingWorkspace.name || isMutating} onClick={() => void handleDelete()}><Trash2 />Delete permanently</Button>
           <Button variant="outline" onClick={() => setDeletingId(null)}>Cancel</Button>
         </div>
       </div> : null}
 
       <DialogFooter className="items-center sm:justify-between">
-        <p className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground"><Import className="size-3" />Workspace files stay on this device unless you export them.</p>
+        <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Import className="size-3" />Workspace files stay on this device unless you export them.</p>
         <Button variant="outline" onClick={() => setOpen(false)}>Done</Button>
       </DialogFooter>
     </DialogContent>

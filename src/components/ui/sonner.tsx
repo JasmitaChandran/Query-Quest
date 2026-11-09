@@ -12,8 +12,9 @@ export function Toaster(props: ToasterProps) {
       position="bottom-right"
       toastOptions={{
         classNames: {
-          toast: "!rounded-xl !border-border !bg-card !text-card-foreground !shadow-2xl",
-          description: "!text-muted-foreground",
+          toast: "!rounded-lg !border-border !bg-card !text-[13px] !text-card-foreground !shadow-2xl",
+          title: "!font-semibold",
+          description: "!text-[12px] !leading-5 !text-muted-foreground",
         },
       }}
       {...props}

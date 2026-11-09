@@ -97,7 +97,7 @@ export function DatabaseActionsMenu({ database }: { database: DatabaseMetadata }
         type="button"
         variant="ghost"
         size="icon-sm"
-        className="size-7 text-muted-foreground hover:text-foreground"
+        className="size-9 text-muted-foreground hover:text-foreground"
         aria-label={`Database actions for ${database.name}`}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
@@ -105,10 +105,10 @@ export function DatabaseActionsMenu({ database }: { database: DatabaseMetadata }
       >
         <MoreHorizontal />
       </Button>
-      {menuOpen ? <div role="menu" aria-label={`Actions for ${database.name}`} className="absolute right-0 top-8 z-30 w-44 rounded-xl border border-border bg-popover p-1.5 shadow-xl">
-        <button type="button" role="menuitem" onClick={() => void handleDownload()} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition hover:bg-accent"><Download className="size-3.5" />Download SQLite</button>
-        <button type="button" role="menuitem" onClick={openRenameDialog} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition hover:bg-accent"><Pencil className="size-3.5" />Rename Database</button>
-        <button type="button" role="menuitem" onClick={openDeleteDialog} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-destructive transition hover:bg-destructive/10"><Trash2 className="size-3.5" />Delete Database</button>
+      {menuOpen ? <div role="menu" aria-label={`Actions for ${database.name}`} className="absolute right-0 top-9 z-30 w-48 rounded-lg border border-border bg-popover p-1.5 shadow-xl">
+        <button type="button" role="menuitem" onClick={() => void handleDownload()} className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition hover:bg-hover"><Download className="size-3.5" />Download SQLite</button>
+        <button type="button" role="menuitem" onClick={openRenameDialog} className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition hover:bg-hover"><Pencil className="size-3.5" />Rename Database</button>
+        <button type="button" role="menuitem" onClick={openDeleteDialog} className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-destructive transition hover:bg-destructive-tint"><Trash2 className="size-3.5" />Delete Database</button>
       </div> : null}
     </div>
 
@@ -121,7 +121,7 @@ export function DatabaseActionsMenu({ database }: { database: DatabaseMetadata }
           </DialogHeader>
           <div className="space-y-2">
             <label htmlFor={`rename-${database.id}`} className="text-xs font-semibold">Database name</label>
-            <input id={`rename-${database.id}`} autoFocus value={name} onChange={(event) => setName(event.target.value)} className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15" />
+            <input id={`rename-${database.id}`} autoFocus value={name} onChange={(event) => setName(event.target.value)} className="ui-input w-full" />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setRenameOpen(false)}>Cancel</Button>
@@ -134,14 +134,14 @@ export function DatabaseActionsMenu({ database }: { database: DatabaseMetadata }
     <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
       <DialogContent>
         <DialogHeader>
-          <div className="grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive"><TriangleAlert className="size-5" /></div>
+          <div className="grid size-11 place-items-center rounded-xl bg-destructive-tint text-destructive"><TriangleAlert className="size-5" /></div>
           <DialogTitle>Delete “{database.name}”?</DialogTitle>
           <DialogDescription>Deleting this database permanently removes all of its tables, records, query history, and checkpoints from this browser. Other databases will not be affected.</DialogDescription>
         </DialogHeader>
         <div className="rounded-xl border border-destructive/20 bg-destructive/[.06] p-3 text-xs leading-5 text-muted-foreground">Type <strong className="text-foreground">{database.name}</strong> to confirm.</div>
         <div className="space-y-2">
           <label htmlFor={`delete-${database.id}`} className="text-xs font-semibold">Database name</label>
-          <input id={`delete-${database.id}`} autoFocus value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition focus:border-destructive/60 focus:ring-2 focus:ring-destructive/15" />
+          <input id={`delete-${database.id}`} autoFocus value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" className="ui-input w-full border-destructive/35 focus-visible:border-destructive" />
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button>

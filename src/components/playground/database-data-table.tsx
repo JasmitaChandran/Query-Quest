@@ -21,9 +21,9 @@ type DataRow = {
 };
 
 function formatSqlValue(value: SqlValue) {
-  if (value === null) return <span className="font-mono text-[11px] text-muted-foreground">NULL</span>;
+  if (value === null) return <span className="font-mono text-xs text-muted-foreground">NULL</span>;
   if (value instanceof Uint8Array) {
-    return <span className="font-mono text-[11px] text-muted-foreground">BLOB · {value.byteLength} B</span>;
+    return <span className="font-mono text-xs text-muted-foreground">BLOB · {value.byteLength} B</span>;
   }
   return String(value);
 }
@@ -80,7 +80,7 @@ export function DatabaseDataTable({
 
   return (
     <div className={cn("min-w-full", presentation && "text-base")}>
-      <div className={cn("sticky left-0 top-0 z-[3] flex min-w-full items-center gap-2 border-b border-border bg-card/95 px-3 backdrop-blur", presentation ? "h-12" : "h-10")}>
+      <div className={cn("sticky left-0 top-0 z-[3] flex min-w-full items-center gap-2 border-b border-border bg-surface-elevated/95 px-3 backdrop-blur", presentation ? "h-12" : "h-10")}>
         <Search className="size-3.5 text-muted-foreground" />
         <label className="sr-only" htmlFor={`${label}-search`}>
           Search {label}
@@ -90,26 +90,26 @@ export function DatabaseDataTable({
           value={globalFilter}
           onChange={(event) => setGlobalFilter(event.target.value)}
           placeholder={`Search ${label}…`}
-          className={cn("min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground/60", presentation ? "h-9 text-sm" : "h-7 text-xs")}
+          className={cn("min-w-0 flex-1 bg-transparent outline-none", presentation ? "h-9 text-sm" : "h-8 text-[13px]")}
         />
         {globalFilter ? (
           <Button
             variant="ghost"
             size="icon-sm"
-            className="size-6"
+            className="size-8"
             onClick={() => setGlobalFilter("")}
             aria-label={`Clear ${label} search`}
           >
             <X />
           </Button>
         ) : null}
-        <span className="shrink-0 text-[9px] tabular-nums text-muted-foreground">
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
           {visibleRows.length} of {data.length}
         </span>
       </div>
 
       <Table className="min-w-max">
-        <TableHeader className={cn("sticky z-[2] bg-card", presentation ? "top-12" : "top-10")}>
+        <TableHeader className={cn("sticky z-[2] bg-table-header", presentation ? "top-12" : "top-10")}>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="hover:bg-transparent">
               {headerGroup.headers.map((header, index) => (
@@ -140,8 +140,8 @@ export function DatabaseDataTable({
                       key={cell.id}
                       className={
                         index === 0
-                          ? "border-r border-border/60 text-center text-[10px] tabular-nums text-muted-foreground"
-                          : cn("max-w-96 truncate border-r border-border/40 last:border-r-0", presentation ? "px-5 py-4 font-mono text-base" : "max-w-80 text-xs")
+                          ? "border-r border-border/60 text-center text-xs tabular-nums text-muted-foreground"
+                          : cn("max-w-96 truncate border-r border-border/40 last:border-r-0", presentation ? "px-5 py-4 font-mono text-base" : "max-w-80 font-mono text-[13px]")
                       }
                       title={value === null ? "NULL" : String(value)}
                     >
@@ -153,7 +153,7 @@ export function DatabaseDataTable({
             ))
           ) : (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={columns.length} className="h-32 text-center text-xs text-muted-foreground">
+              <TableCell colSpan={columns.length} className="h-32 text-center text-[13px] text-muted-foreground">
                 No rows match “{globalFilter}”.
               </TableCell>
             </TableRow>

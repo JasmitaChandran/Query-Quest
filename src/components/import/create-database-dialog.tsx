@@ -67,7 +67,7 @@ export function CreateDatabaseDialog({ compact = false }: { compact?: boolean })
             onChange={(event) => setName(event.target.value)}
             placeholder="Research Lab"
             autoComplete="off"
-            className="mt-2 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/15"
+            className="ui-input mt-2 w-full"
           />
           <DialogFooter className="mt-6">
             <Button type="submit" disabled={!name.trim() || isCreating}>

@@ -112,20 +112,24 @@ function defineQueryQuestThemes(monaco: Monaco) {
       { token: "keyword", foreground: "A78BFA", fontStyle: "bold" },
       { token: "number", foreground: "67E8F9" },
       { token: "string", foreground: "86EFAC" },
-      { token: "comment", foreground: "64748B", fontStyle: "italic" },
+      { token: "comment", foreground: "8792A8", fontStyle: "italic" },
       { token: "identifier", foreground: "E2E8F0" },
     ],
     colors: {
       "editor.background": "#0F111A",
       "editor.foreground": "#E6E8F0",
-      "editorLineNumber.foreground": "#3E4558",
-      "editorLineNumber.activeForeground": "#8B92A5",
+      "editorLineNumber.foreground": "#7D879C",
+      "editorLineNumber.activeForeground": "#CBD5E1",
       "editorCursor.foreground": "#A78BFA",
       "editor.selectionBackground": "#5B3FAF66",
       "editor.lineHighlightBackground": "#171B27",
       "editorSuggestWidget.background": "#171A25",
       "editorSuggestWidget.border": "#34394B",
       "editorSuggestWidget.selectedBackground": "#2A2147",
+      "editorSuggestWidget.foreground": "#E2E8F0",
+      "editorWidget.foreground": "#E2E8F0",
+      "editorHoverWidget.background": "#171A25",
+      "editorHoverWidget.border": "#34394B",
     },
   });
 
@@ -134,15 +138,25 @@ function defineQueryQuestThemes(monaco: Monaco) {
     inherit: true,
     rules: [
       { token: "keyword", foreground: "6D28D9", fontStyle: "bold" },
-      { token: "number", foreground: "0369A1" },
-      { token: "string", foreground: "15803D" },
-      { token: "comment", foreground: "94A3B8", fontStyle: "italic" },
+      { token: "number", foreground: "075985" },
+      { token: "string", foreground: "166534" },
+      { token: "comment", foreground: "64748B", fontStyle: "italic" },
+      { token: "identifier", foreground: "1F2937" },
     ],
     colors: {
-      "editor.background": "#FAFAFD",
+      "editor.background": "#FBFBFE",
+      "editor.foreground": "#1F2937",
+      "editorLineNumber.foreground": "#64748B",
+      "editorLineNumber.activeForeground": "#312E81",
       "editorCursor.foreground": "#7C3AED",
-      "editor.selectionBackground": "#C4B5FD88",
+      "editor.selectionBackground": "#C4B5FD99",
       "editor.lineHighlightBackground": "#F2F0FA",
+      "editorSuggestWidget.background": "#FFFFFF",
+      "editorSuggestWidget.foreground": "#1F2937",
+      "editorSuggestWidget.border": "#D7D5E2",
+      "editorSuggestWidget.selectedBackground": "#EDE9FE",
+      "editorHoverWidget.background": "#FFFFFF",
+      "editorHoverWidget.border": "#D7D5E2",
     },
   });
 }
@@ -307,19 +321,19 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
   const canRun = status === "ready" && Boolean(activeDatabaseId) && Boolean(query.trim());
 
   return (
-    <section className={cn("min-h-[330px] overflow-auto border-b border-border bg-card/25", presentation ? "h-[42vh] min-h-[360px]" : "resize-y md:h-[46vh] md:max-h-[68vh]")}>
-      <div className={cn("flex items-center border-b border-border bg-card/50 px-4", presentation ? "h-12" : "h-10")}>
-        <div className="flex h-full items-center gap-2 border-b-2 border-primary text-xs font-semibold">
+    <section className={cn("min-h-[330px] overflow-auto border-b border-border bg-editor text-editor-foreground", presentation ? "h-[42vh] min-h-[360px]" : "resize-y md:h-[46vh] md:max-h-[68vh]")}>
+      <div className={cn("flex items-center border-b border-border bg-surface-elevated px-4", presentation ? "h-12" : "h-10")}>
+        <div className="flex h-full items-center gap-2 border-b-2 border-primary text-[13px] font-semibold">
           <FileCode2 className="size-3.5 text-primary" />
           {presentation ? "Teaching query.sql" : "query.sql"}
-          <span className="size-1.5 rounded-full bg-emerald-500" />
+          <span className="size-1.5 rounded-full bg-success" />
         </div>
-        <div className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
+        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
           <Braces className="size-3" /> SQLite
         </div>
       </div>
 
-      <div className={cn("flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 sm:px-4", presentation ? "min-h-16" : "min-h-12")}>
+      <div className={cn("flex flex-wrap items-center gap-2 border-b border-border bg-surface px-3 py-2 sm:px-4", presentation ? "min-h-16" : "min-h-12")}>
         <Button
           size={presentation ? "default" : "sm"}
           onClick={() => void executeQuery(editorRef.current?.getValue() ?? query)}
@@ -328,7 +342,7 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
           {isQueryRunning ? <LoaderCircle className="animate-spin" /> : <Play className="fill-current" />}
           {isQueryRunning ? "Running…" : "Run query"}
         </Button>
-        <span className="hidden items-center gap-1 rounded-md border border-border bg-muted/45 px-2 py-1 font-mono text-[9px] text-muted-foreground sm:inline-flex">
+        <span className="hidden items-center gap-1 rounded-md border border-border bg-muted/45 px-2 py-1 font-mono text-xs text-muted-foreground sm:inline-flex">
           <Keyboard className="size-3" /> Ctrl/⌘ Enter
         </span>
         <Button variant="outline" size={presentation ? "default" : "sm"} onClick={() => void handleVisualize()} disabled={!canRun || isQueryRunning || isVisualizationLoading}>
@@ -359,11 +373,11 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
           <RotateCcw />
           <span className="hidden sm:inline">Clear</span>
         </Button>
-        <div className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
           <span className="hidden items-center gap-1.5 sm:flex">
             {status === "ready" ? (
               <>
-                <CircleCheck className="size-3 text-emerald-500" /> SQLite ready
+                <CircleCheck className="size-3 text-success" /> SQLite ready
               </>
             ) : (
               <>
@@ -371,7 +385,7 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
               </>
             )}
           </span>
-          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"><ShieldCheck className="size-3" />Checkpoint protected</span>
+          <span className="inline-flex items-center gap-1 rounded-md border border-success/30 bg-success-tint px-2 py-1 text-xs font-semibold text-success"><ShieldCheck className="size-3" />Checkpoint protected</span>
         </div>
       </div>
 
@@ -387,9 +401,10 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
           onChange={(value) => setQuery(value ?? "")}
           options={{
             automaticLayout: true,
-            fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', monospace",
-            fontSize: presentation ? 20 : 13,
+            fontFamily: "var(--font-geist-mono), 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace",
+            fontSize: presentation ? 20 : 15,
             lineHeight: presentation ? 34 : 24,
+            fontLigatures: true,
             lineNumbers: "on",
             lineNumbersMinChars: 3,
             minimap: { enabled: false },
@@ -406,7 +421,7 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
         />
       </div>
       <div className="flex h-5 cursor-row-resize items-center justify-center border-t border-border/70 bg-muted/20" title="Drag to resize editor">
-        <span className="h-[3px] w-10 rounded-full bg-muted-foreground/20" />
+        <span className="h-[3px] w-10 rounded-full bg-muted-foreground/35" />
       </div>
     </section>
   );

@@ -4,28 +4,61 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --radius: 0.9rem;
+  --radius: 0.625rem;
   --background: oklch(0.985 0.004 285);
   --foreground: oklch(0.20 0.026 285);
-  --card: oklch(1 0 0 / 0.88);
+  --sidebar-background: oklch(0.973 0.008 285);
+  --surface: oklch(1 0 0);
+  --surface-elevated: oklch(0.995 0.004 285);
+  --editor-background: oklch(0.985 0.006 285);
+  --editor-foreground: oklch(0.20 0.026 285);
+  --table-background: oklch(1 0 0);
+  --table-header-background: oklch(0.958 0.009 285);
+  --code-surface: oklch(0.965 0.009 285);
+  --code-foreground: oklch(0.24 0.028 285);
+  --hover: oklch(0.946 0.018 285);
+  --selected: oklch(0.932 0.038 287);
+  --selected-foreground: oklch(0.39 0.19 287);
+  --success: oklch(0.47 0.14 151);
+  --success-tint: oklch(0.95 0.04 151);
+  --warning: oklch(0.53 0.14 76);
+  --warning-tint: oklch(0.96 0.04 76);
+  --info: oklch(0.50 0.16 250);
+  --info-tint: oklch(0.95 0.035 250);
+  --destructive-tint: oklch(0.96 0.035 27);
+  --overlay: oklch(0.10 0.025 279 / 0.64);
+  --card: var(--surface-elevated);
   --card-foreground: oklch(0.20 0.026 285);
-  --popover: oklch(1 0 0);
+  --popover: var(--surface-elevated);
   --popover-foreground: oklch(0.20 0.026 285);
   --primary: oklch(0.58 0.24 287);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.955 0.012 285);
   --secondary-foreground: oklch(0.27 0.025 285);
   --muted: oklch(0.955 0.01 285);
-  --muted-foreground: oklch(0.51 0.025 285);
+  --muted-foreground: oklch(0.46 0.025 285);
   --accent: oklch(0.945 0.025 285);
   --accent-foreground: oklch(0.25 0.04 285);
   --destructive: oklch(0.58 0.23 27);
-  --border: oklch(0.90 0.018 285);
-  --input: oklch(0.90 0.018 285);
+  --border: oklch(0.86 0.018 285);
+  --input: oklch(0.84 0.02 285);
   --ring: oklch(0.58 0.24 287);
+  --focus-ring: var(--ring);
   --brand-violet: #8b5cf6;
   --brand-blue: #4389ff;
-  --primary-glow: rgba(124, 77, 255, 0.42);
+  --primary-glow: rgba(124, 77, 255, 0.24);
+  --diagram-canvas: oklch(0.965 0.008 265);
+  --diagram-node: oklch(1 0 0);
+  --diagram-node-header: oklch(0.965 0.025 285);
+  --diagram-text: oklch(0.22 0.028 278);
+  --diagram-muted: oklch(0.48 0.028 278);
+  --diagram-grid: oklch(0.80 0.018 270);
+  --diagram-edge: oklch(0.54 0.17 250);
+  --diagram-edge-selected: oklch(0.57 0.22 287);
+  --diagram-minimap: oklch(0.99 0.004 270);
+  --diagram-minimap-mask: oklch(0.95 0.008 270 / 0.72);
+  --diagram-neutral: oklch(0.76 0.02 270);
+  --diagram-shadow: 0 16px 42px rgba(40, 35, 70, 0.12);
 }
 
 @keyframes qq-row-order {
@@ -43,32 +76,96 @@
 .qq-combine-row { animation: qq-row-combine 480ms cubic-bezier(.22, 1, .36, 1) both; }
 
 .dark {
-  --background: oklch(0.132 0.021 279);
+  --background: oklch(0.125 0.021 279);
   --foreground: oklch(0.952 0.011 282);
-  --card: oklch(0.175 0.026 279 / 0.92);
+  --sidebar-background: oklch(0.145 0.024 279);
+  --surface: oklch(0.153 0.025 279);
+  --surface-elevated: oklch(0.18 0.028 279);
+  --editor-background: oklch(0.145 0.024 279);
+  --editor-foreground: oklch(0.94 0.012 282);
+  --table-background: oklch(0.153 0.024 279);
+  --table-header-background: oklch(0.19 0.029 279);
+  --code-surface: oklch(0.145 0.024 279);
+  --code-foreground: oklch(0.90 0.016 282);
+  --hover: oklch(0.215 0.034 282);
+  --selected: oklch(0.225 0.06 287);
+  --selected-foreground: oklch(0.86 0.12 287);
+  --success: oklch(0.72 0.16 151);
+  --success-tint: oklch(0.21 0.055 151);
+  --warning: oklch(0.78 0.15 76);
+  --warning-tint: oklch(0.23 0.055 76);
+  --info: oklch(0.74 0.15 250);
+  --info-tint: oklch(0.22 0.055 250);
+  --destructive-tint: oklch(0.22 0.06 27);
+  --overlay: oklch(0.07 0.02 279 / 0.78);
+  --card: var(--surface-elevated);
   --card-foreground: oklch(0.952 0.011 282);
-  --popover: oklch(0.175 0.026 279);
+  --popover: var(--surface-elevated);
   --popover-foreground: oklch(0.952 0.011 282);
   --primary: oklch(0.68 0.21 288);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.215 0.03 279);
   --secondary-foreground: oklch(0.93 0.012 282);
   --muted: oklch(0.205 0.024 279);
-  --muted-foreground: oklch(0.67 0.026 280);
+  --muted-foreground: oklch(0.74 0.022 280);
   --accent: oklch(0.235 0.044 284);
   --accent-foreground: oklch(0.97 0.01 280);
   --destructive: oklch(0.64 0.22 27);
-  --border: oklch(0.32 0.038 279 / 0.7);
-  --input: oklch(0.30 0.038 279);
+  --border: oklch(0.34 0.035 279 / 0.82);
+  --input: oklch(0.36 0.038 279);
   --ring: oklch(0.68 0.21 288);
-  --primary-glow: rgba(139, 92, 246, 0.5);
+  --focus-ring: var(--ring);
+  --primary-glow: rgba(139, 92, 246, 0.28);
+  --diagram-canvas: oklch(0.115 0.023 275);
+  --diagram-node: oklch(0.18 0.027 277);
+  --diagram-node-header: oklch(0.205 0.044 283);
+  --diagram-text: oklch(0.94 0.014 280);
+  --diagram-muted: oklch(0.72 0.024 278);
+  --diagram-grid: oklch(0.31 0.03 273);
+  --diagram-edge: oklch(0.69 0.16 250);
+  --diagram-edge-selected: oklch(0.75 0.18 287);
+  --diagram-minimap: oklch(0.17 0.025 277);
+  --diagram-minimap-mask: oklch(0.08 0.02 275 / 0.72);
+  --diagram-neutral: oklch(0.31 0.03 274);
+  --diagram-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
 }
 
 @theme inline {
-  --font-sans: "Inter", "SF Pro Text", "Segoe UI", sans-serif;
-  --font-display: "Manrope", "SF Pro Display", "Segoe UI", sans-serif;
+  --font-sans: var(--font-geist-sans), "Inter", "SF Pro Text", "Segoe UI", sans-serif;
+  --font-display: var(--font-geist-sans), "Inter", "SF Pro Display", "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar-background);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-editor: var(--editor-background);
+  --color-editor-foreground: var(--editor-foreground);
+  --color-table: var(--table-background);
+  --color-table-header: var(--table-header-background);
+  --color-code: var(--code-surface);
+  --color-code-foreground: var(--code-foreground);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
+  --color-selected-foreground: var(--selected-foreground);
+  --color-success: var(--success);
+  --color-success-tint: var(--success-tint);
+  --color-warning: var(--warning);
+  --color-warning-tint: var(--warning-tint);
+  --color-info: var(--info);
+  --color-info-tint: var(--info-tint);
+  --color-destructive-tint: var(--destructive-tint);
+  --color-overlay: var(--overlay);
+  --color-diagram-canvas: var(--diagram-canvas);
+  --color-diagram-node: var(--diagram-node);
+  --color-diagram-node-header: var(--diagram-node-header);
+  --color-diagram-text: var(--diagram-text);
+  --color-diagram-muted: var(--diagram-muted);
+  --color-diagram-grid: var(--diagram-grid);
+  --color-diagram-edge: var(--diagram-edge);
+  --color-diagram-edge-selected: var(--diagram-edge-selected);
+  --color-diagram-minimap: var(--diagram-minimap);
+  --color-diagram-neutral: var(--diagram-neutral);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -91,6 +188,11 @@
   border-color: var(--border);
 }
 
+:where(button, input, select, textarea, [role="button"], [role="tab"]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -101,6 +203,50 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(in oklab, var(--muted-foreground) 82%, transparent);
+}
+
+.ui-kicker {
+  font-size: 0.6875rem;
+  font-weight: 650;
+  line-height: 1rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.ui-meta {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--muted-foreground);
+}
+
+.ui-input {
+  min-height: 2.5rem;
+  border: 1px solid var(--input);
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, var(--background) 92%, transparent);
+  padding-inline: 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.ui-input:focus-visible {
+  border-color: color-mix(in oklab, var(--primary) 65%, var(--input));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 18%, transparent);
 }
 
 ::selection {
@@ -132,24 +278,29 @@ body {
   background-clip: padding-box;
 }
 
+.workspace-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--muted-foreground) 46%, transparent);
+  background-clip: padding-box;
+}
+
 .schema-flow {
-  --xy-background-color: #090c16;
-  --xy-edge-stroke: #818cf8;
-  --xy-edge-stroke-selected: #a78bfa;
-  --xy-controls-button-background-color: rgba(17, 21, 34, 0.96);
-  --xy-controls-button-background-color-hover: rgba(38, 43, 64, 0.98);
-  --xy-controls-button-color: #cbd5e1;
-  --xy-controls-button-color-hover: #ffffff;
-  --xy-controls-button-border-color: rgba(148, 163, 184, 0.16);
-  --xy-minimap-background-color: rgba(17, 21, 34, 0.94);
+  --xy-background-color: var(--diagram-canvas);
+  --xy-edge-stroke: var(--diagram-edge);
+  --xy-edge-stroke-selected: var(--diagram-edge-selected);
+  --xy-controls-button-background-color: var(--surface-elevated);
+  --xy-controls-button-background-color-hover: var(--hover);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--selected-foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-minimap-background-color: var(--diagram-minimap);
 }
 
 .schema-flow .react-flow__controls,
 .schema-flow .react-flow__minimap {
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 12px;
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--diagram-shadow);
 }
 
 .schema-flow .react-flow__node {
@@ -173,4 +324,15 @@ body {
 
 .teaching-visualizer .workspace-scrollbar {
   max-height: 50vh;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

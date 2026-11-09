@@ -107,16 +107,16 @@ function ExplorerSidebar() {
   return (
     <aside
       className={cn(
-        "workspace-scrollbar relative shrink-0 border-b border-border bg-card/40 transition-[width] duration-200 md:border-b-0 md:border-r",
+        "workspace-scrollbar relative shrink-0 border-b border-border bg-sidebar transition-[width] duration-200 md:border-b-0 md:border-r",
         explorerCollapsed
-          ? "h-12 w-full overflow-hidden md:h-auto md:w-14"
+          ? "h-11 w-full overflow-hidden md:h-auto md:w-14"
           : "h-72 w-full overflow-auto md:h-auto md:w-[280px] md:min-w-[230px] md:max-w-[440px] md:resize-x",
       )}
       aria-label="Database explorer"
     >
-      <div className="sticky top-0 z-10 flex h-12 items-center justify-between border-b border-border bg-card/90 px-3 backdrop-blur">
+      <div className="sticky top-0 z-10 flex h-11 items-center justify-between border-b border-border bg-surface-elevated/95 px-3 backdrop-blur">
         {!explorerCollapsed ? (
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">
+          <div className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
             <FileDatabase className="size-4" />
             Explorer
           </div>
@@ -136,29 +136,29 @@ function ExplorerSidebar() {
       </div>
 
       {!explorerCollapsed ? (
-        <div className="flex min-h-[calc(100%-3rem)] flex-col">
+        <div className="flex min-h-[calc(100%-2.75rem)] flex-col">
           <div className="border-b border-border p-3">
-            <p className="text-[9px] font-bold uppercase tracking-[.16em] text-muted-foreground/70">Databases</p>
+            <p className="ui-kicker">Databases</p>
             <div className="mt-2 grid gap-2 [&_button]:w-full">
               <ImportDatabaseDialog />
               <CreateDatabaseDialog />
             </div>
-            <div className="workspace-scrollbar mt-2 max-h-36 space-y-1 overflow-y-auto rounded-xl border border-border bg-background/35 p-1.5">
+            <div className="workspace-scrollbar mt-2 max-h-36 space-y-1 overflow-y-auto rounded-xl border border-border bg-surface p-1.5">
               {databases.length ? databases.map((database) => {
                 const active = database.id === activeDatabaseId;
-                return <div key={database.id} className={cn("flex items-center rounded-lg transition", active ? "bg-primary/10 text-primary" : "hover:bg-accent")}>
-                  <button type="button" onClick={() => void switchDatabase(database.id)} disabled={status !== "ready" || active} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-xs disabled:cursor-default">
-                    <span className={cn("size-1.5 shrink-0 rounded-full", active ? "bg-primary" : "bg-muted-foreground/35")} />
+                return <div key={database.id} className={cn("flex items-center rounded-lg border border-transparent transition", active ? "border-primary/25 bg-selected text-selected-foreground" : "hover:bg-hover")}>
+                  <button type="button" onClick={() => void switchDatabase(database.id)} disabled={status !== "ready" || active} className="flex min-h-9 min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-[13px] disabled:cursor-default">
+                    <span className={cn("size-1.5 shrink-0 rounded-full", active ? "bg-primary ring-2 ring-primary/20" : "bg-muted-foreground/45")} />
                     <span className="min-w-0 flex-1 truncate font-semibold">{database.name}</span>
-                    {active ? <span className="text-[8px] font-bold uppercase tracking-wide">Active</span> : null}
+                    {active ? <span className="text-xs font-semibold uppercase tracking-wide">Active</span> : null}
                   </button>
                   <DatabaseActionsMenu database={database} />
                 </div>;
-              }) : <p className="px-2 py-3 text-center text-[11px] text-muted-foreground">No databases yet.</p>}
+              }) : <p className="px-2 py-3 text-center text-xs text-muted-foreground">No databases yet.</p>}
             </div>
-            <div className="mt-2 flex h-8 items-center gap-2 rounded-lg border border-border bg-background/40 px-2.5 text-muted-foreground">
+            <div className="mt-2 flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-muted-foreground">
               <Search className="size-3.5" />
-              <span className="text-[11px]">{activeDatabaseId ? `${tables.length} tables and views` : "Select or create a database"}</span>
+              <span className="text-xs">{activeDatabaseId ? `${tables.length} tables and views` : "Select or create a database"}</span>
             </div>
             {activeDatabaseId ? <div className="mt-2"><TableDesignerDialog /></div> : null}
           </div>
@@ -169,12 +169,12 @@ function ExplorerSidebar() {
             <div className="flex flex-1 flex-col items-center justify-center px-5 py-7 text-center">
               <div className="grid size-11 place-items-center rounded-2xl border border-border bg-muted/45 text-muted-foreground"><Database className="size-5" /></div>
               <p className="mt-4 text-sm font-semibold">No databases yet.</p>
-              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">Create an empty SQLite database or import one stored on your device.</p>
+              <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">Create an empty SQLite database or import one stored on your device.</p>
               <div className="mt-4 grid w-full max-w-64 grid-cols-1 gap-2 [&_button]:w-full"><ImportDatabaseDialog /><CreateDatabaseDialog /></div>
             </div>
           ) : tables.length > 0 ? (
             <div className="flex-1 p-2">
-              <p className="px-2 py-2 text-[9px] font-bold uppercase tracking-[.16em] text-muted-foreground/70">
+              <p className="ui-kicker px-2 py-2">
                 Schema
               </p>
               <div className="space-y-0.5">
@@ -192,13 +192,13 @@ function ExplorerSidebar() {
                           setSchemaEditorTable(table.name);
                         }}
                         className={cn(
-                          "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition hover:bg-accent",
-                          active && "bg-primary/10 text-primary",
+                          "flex min-h-9 w-full items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-[13px] transition hover:bg-hover",
+                          active && "border-primary/20 bg-selected text-selected-foreground",
                         )}
                       >
                         <Table2 className="size-3.5 shrink-0" />
                         <span className="min-w-0 flex-1 truncate font-medium">{table.name}</span>
-                        <span className="text-[9px] tabular-nums text-muted-foreground">
+                        <span className="text-xs tabular-nums text-muted-foreground">
                           {table.rowCount}
                         </span>
                       </button>
@@ -207,20 +207,20 @@ function ExplorerSidebar() {
                           {selectedSchema.columns.map((column) => (
                             <div
                               key={column.name}
-                              className="flex items-center gap-2 py-1 text-[10px] text-muted-foreground"
+                              className="flex min-h-7 items-center gap-2 py-1 text-xs text-muted-foreground"
                             >
                               {column.primaryKey ? (
-                                <KeyRound className="size-3 text-amber-500" />
+                                <KeyRound className="size-3 text-warning" />
                               ) : (
                                 <Columns3 className="size-3" />
                               )}
                               <span className="min-w-0 flex-1 truncate">{column.name}</span>
-                              <span className="max-w-20 truncate font-mono text-[8px] text-muted-foreground/70">
+                              <span className="max-w-20 truncate font-mono text-xs text-muted-foreground">
                                 {column.type}
                               </span>
                             </div>
                           ))}
-                          {table.type === "table" ? <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 w-full justify-start px-2 text-[10px] text-muted-foreground hover:text-primary" onClick={() => setSchemaEditorTable(table.name)}><TableProperties className="size-3" />Edit schema</Button> : null}
+                          {table.type === "table" ? <Button type="button" variant="ghost" size="sm" className="mt-1 w-full justify-start px-2 text-xs text-muted-foreground hover:text-primary" onClick={() => setSchemaEditorTable(table.name)}><TableProperties className="size-3.5" />Edit schema</Button> : null}
                         </div>
                       ) : null}
                     </div>
@@ -234,15 +234,15 @@ function ExplorerSidebar() {
                 <Database className="size-5" />
               </div>
               <p className="mt-4 text-sm font-semibold">Empty database</p>
-              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
+              <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">
                 This logical database is ready for internal schema setup.
               </p>
             </div>
           )}
 
-          <div className="sticky bottom-0 border-t border-border bg-card/90 p-3 backdrop-blur">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-              <span className="size-1.5 rounded-full bg-emerald-500" />
+          <div className="sticky bottom-0 border-t border-border bg-surface-elevated/95 p-3 backdrop-blur">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="size-1.5 rounded-full bg-success" />
               {databases.length} {databases.length === 1 ? "database" : "databases"}
               <span className="ml-auto">IndexedDB</span>
             </div>
@@ -278,23 +278,23 @@ function DataPanel({ kind, className }: { kind: "source" | "result"; className?:
   };
 
   return (
-    <section className={cn("flex min-h-[270px] min-w-0 flex-1 flex-col bg-card/20", className)}>
+    <section className={cn("flex min-h-[270px] min-w-0 flex-1 flex-col bg-table", className)}>
       <header className="flex h-11 shrink-0 items-center border-b border-border px-4">
-        <div className="flex items-center gap-2 text-xs font-semibold">
-          <Icon className={cn("size-3.5", source ? "text-blue-500" : "text-violet-500")} />
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Icon className={cn("size-3.5", source ? "text-info" : "text-primary")} />
           {source ? "Original table" : "Result table"}
         </div>
         {source && selectedTable ? (
-          <span className="ml-2 max-w-28 truncate rounded-full bg-blue-500/10 px-2 py-0.5 text-[9px] font-semibold text-blue-500">
+          <span className="ml-2 max-w-28 truncate rounded-full bg-info-tint px-2 py-0.5 text-xs font-semibold text-info">
             {selectedTable}
           </span>
         ) : null}
-        <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[9px] font-semibold text-muted-foreground">
+        <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
           {result?.rowCount ?? 0} rows
         </span>
-        <div className="ml-auto flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
           {!source && result?.columns.length ? <SaveResultDialog /> : null}
-          {!source && result?.columns.length ? <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]" onClick={downloadCsv} title="Download result as CSV"><Download />CSV</Button> : null}
+          {!source && result?.columns.length ? <Button variant="ghost" size="sm" className="px-2 text-xs" onClick={downloadCsv} title="Download result as CSV"><Download />CSV</Button> : null}
           <Columns3 className="size-3" />
           {result?.columns.length ?? 0} columns
           {!source && result ? (
@@ -311,11 +311,11 @@ function DataPanel({ kind, className }: { kind: "source" | "result"; className?:
           </div>
         ) : !source && queryError ? (
           <div className="flex min-h-48 flex-col items-center justify-center px-6 text-center" role="alert">
-            <div className="grid size-11 place-items-center rounded-2xl bg-destructive/10 text-destructive">
+            <div className="grid size-11 place-items-center rounded-2xl bg-destructive-tint text-destructive">
               <AlertCircle className="size-5" />
             </div>
             <p className="mt-4 text-sm font-semibold text-destructive">SQL execution failed</p>
-            <p className="mt-1.5 max-w-md font-mono text-xs leading-5 text-muted-foreground">
+            <p className="mt-1.5 max-w-md font-mono text-[13px] leading-5 text-muted-foreground">
               {queryError}
             </p>
           </div>
@@ -354,7 +354,7 @@ function WorkspaceNavigation({ onEnterTeachingMode }: { onEnterTeachingMode: () 
   };
 
   return (
-    <div className="flex min-h-12 items-center gap-1 overflow-x-auto border-b border-border bg-card/35 px-3 sm:px-4">
+    <div className="flex min-h-11 items-center gap-1 overflow-x-auto border-b border-border bg-surface px-3 sm:px-4">
       {workspaceTabs.map((tab) => {
         const Icon = tab.icon;
         const active = activePanel === tab.id;
@@ -365,7 +365,7 @@ function WorkspaceNavigation({ onEnterTeachingMode }: { onEnterTeachingMode: () 
             disabled={tab.disabled}
             onClick={() => setActivePanel(tab.id)}
             className={cn(
-              "relative inline-flex h-12 shrink-0 items-center gap-2 px-3 text-xs font-semibold text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45",
+              "relative inline-flex h-11 shrink-0 items-center gap-2 px-3 text-[13px] font-medium text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-55",
               active && "text-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary",
             )}
           >
@@ -377,12 +377,12 @@ function WorkspaceNavigation({ onEnterTeachingMode }: { onEnterTeachingMode: () 
       })}
       <div className="ml-auto flex items-center gap-1 border-l pl-2">
         <WorkspaceManagerDialog />
-        <Button variant="outline" size="sm" className="mr-1 border-violet-500/25 bg-violet-500/[.06] text-violet-600 hover:bg-violet-500/10 dark:text-violet-300" onClick={onEnterTeachingMode} aria-label="Enter Teaching Mode"><GraduationCap /><span className="hidden lg:inline">Teaching Mode</span></Button>
+        <Button variant="outline" size="sm" className="mr-1 border-primary/25 bg-selected text-selected-foreground hover:bg-hover" onClick={onEnterTeachingMode} aria-label="Enter Teaching Mode"><GraduationCap /><span className="hidden lg:inline">Teaching Mode</span></Button>
         <Button variant="ghost" size="icon-sm" disabled={!canUndo || isMutating} onClick={() => void runAction("undo")} title="Undo database change" aria-label="Undo database change"><Undo2 /></Button>
         <Button variant="ghost" size="icon-sm" disabled={!canRedo || isMutating} onClick={() => void runAction("redo")} title="Redo database change" aria-label="Redo database change"><Redo2 /></Button>
         <Button variant="ghost" size="icon-sm" disabled={isMutating} onClick={() => void runAction("reset")} title="Reset database" aria-label="Reset database"><RotateCcw /></Button>
       </div>
-      <div className="hidden items-center gap-2 text-[10px] text-muted-foreground sm:flex">
+      <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
         <Info className="size-3" />
         Worker-isolated SQLite
       </div>
@@ -396,7 +396,7 @@ function DatabaseErrorBanner() {
   if (!error) return null;
 
   return (
-    <div className="flex items-start gap-2 border-b border-destructive/25 bg-destructive/10 px-4 py-2 text-xs text-destructive" role="alert">
+    <div className="flex items-start gap-2 border-b border-destructive/25 bg-destructive-tint px-4 py-2 text-[13px] text-destructive" role="alert">
       <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
       <span className="flex-1">{error}</span>
       <Button variant="ghost" size="icon-sm" onClick={clearError} aria-label="Dismiss database error">
@@ -427,7 +427,7 @@ export function SqlWorkspace() {
   }, [activePanel, activeWorkspaceId, editorSql, explorerCollapsed, saveWorkspaceSettings, status]);
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-background">
+    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-background">
       <WorkspaceNavigation onEnterTeachingMode={() => {
         setTeachingMode(true);
         void document.documentElement.requestFullscreen?.().catch(() => undefined);
@@ -439,9 +439,9 @@ export function SqlWorkspace() {
           {activePanel === "data" ? <VisualDataEditor /> : activePanel === "schema" ? <SchemaDiagram /> : activePanel === "visualizer" ? <QueryVisualizer /> : activePanel === "history" ? <QueryHistoryPanel /> : <><MonacoSqlEditor /><div className="flex min-h-[290px] flex-col divide-y divide-border md:flex-row md:divide-x md:divide-y-0"><DataPanel kind="source" className="md:resize-x md:overflow-auto" /><DataPanel kind="result" /></div></>}
         </div>
       </div>
-      <footer className="flex min-h-7 flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-card/60 px-3 py-1 text-[10px] text-muted-foreground sm:px-4">
+      <footer className="flex min-h-8 flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-surface-elevated px-3 py-1 text-xs text-muted-foreground sm:px-4">
         <span className="inline-flex items-center gap-1.5">
-          <span className={cn("size-1.5 rounded-full", status === "ready" ? "bg-emerald-500" : "bg-amber-500")} />
+          <span className={cn("size-1.5 rounded-full", status === "ready" ? "bg-success" : "bg-warning")} />
           {activeDatabase?.name ?? (status === "ready" ? "No active database" : "Initializing database")}
         </span>
         <span className="inline-flex items-center gap-1.5">
