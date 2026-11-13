@@ -75,6 +75,22 @@
 
 .qq-combine-row { animation: qq-row-combine 480ms cubic-bezier(.22, 1, .36, 1) both; }
 
+@keyframes qq-project-apply {
+  from { opacity: .55; transform: translateX(12px) scale(.992); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.qq-project-apply { animation: qq-project-apply 520ms cubic-bezier(.22, 1, .36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qq-order-row,
+  .qq-combine-row,
+  .qq-project-apply {
+    animation-duration: 1ms;
+    animation-iteration-count: 1;
+  }
+}
+
 .dark {
   --background: oklch(0.125 0.021 279);
   --foreground: oklch(0.952 0.011 282);

@@ -403,6 +403,32 @@ function sourceTableSql(source: SourceRef) {
   return `SELECT rowid AS "__qq_rowid__", * FROM ${quoteIdentifier(source.tableName)}`;
 }
 
+function sourceLabel(source: SourceRef) {
+  return `${quoteIdentifier(source.tableName)}${source.alias ? ` AS ${quoteIdentifier(source.alias)}` : ""}`;
+}
+
+function fromClauseSql(analysis: VisualizationAnalysis) {
+  const [first, second] = analysis.sourceTables;
+  if (!analysis.join || !second) return `FROM ${sourceLabel(first)}`;
+  const left = `${quoteIdentifier(analysis.join.left.table)}.${quoteIdentifier(analysis.join.left.column)}`;
+  const right = `${quoteIdentifier(analysis.join.right.table)}.${quoteIdentifier(analysis.join.right.column)}`;
+  return `FROM ${sourceLabel(first)}\n${analysis.join.type} JOIN ${sourceLabel(second)}\n  ON ${left} = ${right}`;
+}
+
+function selectClauseSql(ast: Select) {
+  const columns = (ast.columns as Column[]).map((column) => {
+    const expression = parser.exprToSQL(column.expr as ExpressionValue);
+    return column.as ? `${expression} AS ${quoteIdentifier(String(column.as))}` : expression;
+  });
+  return `SELECT ${columns.join(", ")}`;
+}
+
+function selectedSourceColumns(analysis: VisualizationAnalysis) {
+  return analysis.selectedColumns.some((column) => column.source === "*")
+    ? ["*"]
+    : analysis.selectedColumns.map((column) => column.source);
+}
+
 async function loadSources(sources: SourceRef[], execute: (sql: string) => Promise<QueryResult>) {
   const loaded: VisualizationSourceTable[] = [];
   for (const source of sources) {
@@ -425,6 +451,34 @@ function sourcePanels(sources: VisualizationSourceTable[], analysis: Visualizati
   });
 }
 
+function projectionPanels(
+  sources: VisualizationSourceTable[],
+  analysis: VisualizationAnalysis,
+): VisualizationPanel[] {
+  return sources.map((source, index) => {
+    const qualifiers = new Set(
+      [source.tableName, source.alias].filter(Boolean).map((value) => value!.toLowerCase()),
+    );
+    const highlightedColumns = analysis.selectedColumns.flatMap((column) => {
+      if (column.source === "*") {
+        return !column.table || qualifiers.has(column.table.toLowerCase())
+          ? source.table.columns
+          : [];
+      }
+      if (column.table && !qualifiers.has(column.table.toLowerCase())) return [];
+      return source.table.columns.some(
+        (candidate) => candidate.toLowerCase() === column.source.toLowerCase(),
+      ) ? [column.source] : [];
+    });
+    return {
+      id: `projection-${source.tableName}-${index}`,
+      label: source.alias ? `${source.tableName} as ${source.alias}` : source.tableName,
+      table: source.table,
+      highlightedColumns: [...new Set(highlightedColumns)],
+    };
+  });
+}
+
 function finalPlan(sql: string, analysis: VisualizationAnalysis, sources: VisualizationSourceTable[], finalResult: QueryResult, steps: VisualizationStep[], validated: boolean, mutationResult?: QueryResult): VisualizationPlan {
   return { sql, analysis, source: sources[0].table, sources, finalResult, mutationResult, steps, validated };
 }
@@ -433,17 +487,18 @@ async function appendResultStages(ast: Select, analysis: VisualizationAnalysis, 
   const base: Partial<Select> = { columns: clone(ast.columns as Column[]), where: clone(ast.where), groupby: clone(ast.groupby), having: null, limit: null };
   if (ast.distinct) {
     const result = await execute(queryWith(ast, { ...base, distinct: "DISTINCT", orderby: null }));
-    steps.push({ id: "distinct", kind: "distinct", title: "Remove duplicate rows", clause: "DISTINCT", explanation: "DISTINCT compares the projected values using SQLite semantics. Duplicate rows collapse, including duplicate NULL projections.", table: tableFromResult(result) });
+    steps.push({ id: "distinct", kind: "distinct", title: "Remove duplicate rows", clause: "DISTINCT", sqlFragment: `${selectClauseSql(ast).replace(/^SELECT /, "SELECT DISTINCT ")}`, explanation: "DISTINCT compares the projected values using SQLite semantics. Duplicate rows collapse, including duplicate NULL projections.", table: tableFromResult(result) });
   }
   if (ast.orderby?.length) {
     const withIdentity = identityColumn && !ast.distinct;
     const result = await execute(queryWith(ast, { ...base, columns: withIdentity ? [identityColumn, ...clone(ast.columns as Column[])] : base.columns, distinct: ast.distinct, orderby: clone(ast.orderby), limit: null }));
-    steps.push({ id: "order", kind: "order", title: "Arrange the rows", clause: "ORDER BY", explanation: `ORDER BY arranges rows by ${analysis.orderBy.map((item) => `${item.column} ${item.direction}`).join(", ")}. The movement is logical ordering, not a physical execution plan.`, table: withIdentity ? stripRowIds(result) : tableFromResult(result), animateReorder: true });
+    const orderTerms = analysis.orderBy.map((item) => `${item.column} ${item.direction}`).join(", ");
+    steps.push({ id: "order", kind: "order", title: "Arrange the rows", clause: "ORDER BY", sqlFragment: `ORDER BY ${orderTerms}`, explanation: `ORDER BY arranges rows by ${orderTerms}. Rows with equal sort keys have no guaranteed relative order unless additional ORDER BY terms disambiguate them. The movement is logical ordering, not a physical execution plan.`, table: withIdentity ? stripRowIds(result) : tableFromResult(result), animateReorder: true });
   }
   if (ast.limit) {
     const withIdentity = identityColumn && !ast.distinct;
     const result = await execute(queryWith(ast, { ...base, columns: withIdentity ? [identityColumn, ...clone(ast.columns as Column[])] : base.columns, distinct: ast.distinct, orderby: clone(ast.orderby), limit: clone(ast.limit) }));
-    steps.push({ id: "limit", kind: "limit", title: "Keep the requested slice", clause: "LIMIT", explanation: `LIMIT keeps ${analysis.limit} row${analysis.limit === 1 ? "" : "s"}${analysis.offset ? ` after skipping ${analysis.offset}` : ""}.`, table: withIdentity ? stripRowIds(result) : tableFromResult(result) });
+    steps.push({ id: "limit", kind: "limit", title: "Keep the requested slice", clause: "LIMIT", sqlFragment: `LIMIT ${analysis.limit}${analysis.offset ? ` OFFSET ${analysis.offset}` : ""}`, explanation: `LIMIT keeps ${analysis.limit} row${analysis.limit === 1 ? "" : "s"}${analysis.offset ? ` after skipping ${analysis.offset}` : ""}.`, table: withIdentity ? stripRowIds(result) : tableFromResult(result) });
   }
 }
 
@@ -451,20 +506,25 @@ async function createSimpleSelectPlan(sql: string, ast: Select, analysis: Visual
   const sources = await loadSources(analysis.sourceTables, execute);
   const source = sources[0].table;
   const rowid = rowIdColumn(analysis.tableAlias, "__qq_rowid__");
-  const steps: VisualizationStep[] = [{ id: "source", kind: "source", title: `Read ${analysis.tableName}`, clause: "FROM", explanation: `FROM loads every row from ${analysis.tableName}. No filtering or projection has happened yet.`, table: source }];
+  const steps: VisualizationStep[] = [{ id: "source", kind: "source", title: `Read ${analysis.tableName}`, clause: "FROM", sqlFragment: fromClauseSql(analysis), explanation: `FROM loads every row from ${analysis.tableName}. No filtering or projection has happened yet.`, table: source }];
   let matchingRowIds = source.rowIds ?? [];
   if (ast.where) {
     const matches = await execute(queryWith(ast, { columns: [rowid], distinct: null, orderby: null, limit: null }));
     matchingRowIds = matches.values.map((row) => Number(row[0]));
-    steps.push({ id: "filter", kind: "filter", title: "Evaluate the predicate", clause: "WHERE", explanation: `SQLite evaluates ${parser.exprToSQL(ast.where)} for each row. TRUE rows stay highlighted; FALSE and NULL rows are dimmed.`, table: source, matchingRowIds });
+    const predicate = parser.exprToSQL(ast.where);
+    steps.push({ id: "filter", kind: "filter", title: "Evaluate the predicate", clause: "WHERE", sqlFragment: `WHERE ${predicate}`, explanation: `SQLite evaluates ${predicate} for each row. ${matchingRowIds.length} of ${source.totalRows ?? source.values.length} rows evaluate to TRUE and are retained. FALSE and NULL results are dimmed because SQL keeps only TRUE rows.`, table: source, matchingRowIds });
   }
   const highlightedColumns = analysis.selectedColumns.some((column) => column.source === "*") ? source.columns : analysis.selectedColumns.map((column) => column.source);
-  steps.push({ id: "project", kind: "project", title: "Choose output columns", clause: "SELECT", explanation: `SELECT keeps ${highlightedColumns.length === source.columns.length ? "all columns" : highlightedColumns.join(", ")}. Aliases affect output labels without changing source data.`, table: source, matchingRowIds: ast.where ? matchingRowIds : undefined, highlightedColumns });
+  const selectFragment = selectClauseSql(ast);
+  steps.push({ id: "project-highlight", kind: "project", title: "Highlight selected columns", clause: "SELECT", sqlFragment: selectFragment, explanation: `First, keep the source context visible and highlight ${highlightedColumns.length === source.columns.length ? "every source column" : highlightedColumns.join(", ")}. Rows that did not satisfy WHERE remain dimmed.`, table: source, matchingRowIds: ast.where ? matchingRowIds : undefined, highlightedColumns, projectionPhase: "highlight" });
+  const projected = await execute(queryWith(ast, { columns: [rowid, ...clone(ast.columns as Column[])], distinct: null, orderby: null, limit: null }));
+  const projectedTable = stripRowIds(projected);
+  steps.push({ id: "project-apply", kind: "project", title: "Apply the projection", clause: "SELECT", sqlFragment: selectFragment, explanation: `Now SELECT produces only the requested output columns. ${analysis.selectedColumns.some((column) => column.source !== column.output) ? "Aliases become the result column names shown here." : "The result column names match the selected expressions."}`, table: projectedTable, highlightedColumns: projectedTable.columns, projectionPhase: "apply", animateCombine: true });
   await appendResultStages(ast, analysis, steps, execute, rowid);
   const visualizedResult = await execute(parser.sqlify(clone(ast), { database: "sqlite" }));
   const finalResult = await execute(sql);
   const validated = resultsEqual(visualizedResult, finalResult);
-  steps.push({ id: "result", kind: "result", title: "Final SQLite result", clause: "RESULT", explanation: `The teaching animation is validated against SQLite’s real result: ${finalResult.rowCount} row${finalResult.rowCount === 1 ? "" : "s"} returned.`, table: tableFromResult(finalResult) });
+  steps.push({ id: "result", kind: "result", title: "Final SQLite result", clause: "RESULT", sqlFragment: "Validated against SQLite", explanation: `The teaching animation is validated against SQLite’s real result: ${finalResult.rowCount} row${finalResult.rowCount === 1 ? "" : "s"} returned.`, table: tableFromResult(finalResult) });
   return finalPlan(sql, analysis, sources, finalResult, steps, validated);
 }
 
@@ -531,8 +591,10 @@ function groupSummaries(table: VisualizationTable, analysis: VisualizationAnalys
 
 async function createAdvancedSelectPlan(sql: string, ast: Select, analysis: VisualizationAnalysis, execute: (sql: string) => Promise<QueryResult>) {
   const sources = await loadSources(analysis.sourceTables, execute);
-  const steps: VisualizationStep[] = [{ id: "source", kind: "source", title: sources.length === 2 ? "Load the participating tables" : `Read ${analysis.tableName}`, clause: "FROM", explanation: sources.length === 2 ? `FROM loads ${sources.map((source) => source.tableName).join(" and ")} independently before their join condition is evaluated.` : `FROM loads every row from ${analysis.tableName}.`, table: sources[0].table, panels: sourcePanels(sources, analysis) }];
+  const steps: VisualizationStep[] = [{ id: "source", kind: "source", title: sources.length === 2 ? "Load the participating tables" : `Read ${analysis.tableName}`, clause: "FROM", sqlFragment: fromClauseSql(analysis), explanation: sources.length === 2 ? `FROM loads ${sources.map((source) => source.tableName).join(" and ")} independently before their join condition is evaluated.` : `FROM loads every row from ${analysis.tableName}.`, table: sources[0].table, panels: sourcePanels(sources, analysis) }];
   let workingTable = sources[0].table;
+  let matchingRowIds: number[] | undefined;
+  let matchingRowKeys: string[] | undefined;
 
   if (analysis.join) {
     const rawBeforeWhere = await execute(queryWith(ast, { columns: joinRawColumns(analysis), distinct: null, where: null, groupby: undefined, having: null, orderby: null, limit: null }));
@@ -541,14 +603,19 @@ async function createAdvancedSelectPlan(sql: string, ast: Select, analysis: Visu
     const leftMatches = uniqueNumbers(joined.leftIds.filter((_, index) => joined.rightIds[index] !== null));
     const rightMatches = uniqueNumbers(joined.rightIds);
     const unmatchedLeft = uniqueNumbers(joined.leftIds.filter((_, index) => joined.rightIds[index] === null));
-    steps.push({ id: "join", kind: "join", title: analysis.join.type === "LEFT" ? "Preserve left rows and match" : "Match related rows", clause: `${analysis.join.type} JOIN`, explanation: `${analysis.join.left.table}.${analysis.join.left.column} is compared with ${analysis.join.right.table}.${analysis.join.right.column}. ${analysis.join.type === "LEFT" ? `${unmatchedLeft.length} left-side row${unmatchedLeft.length === 1 ? " has" : "s have"} no match, so SQLite supplies NULL for the right-side columns.` : "Only matching combinations continue."}`, table: joined.table, panels: sourcePanels(sources, analysis, { leftIds: leftMatches, rightIds: rightMatches, unmatchedLeftIds: unmatchedLeft }), unmatchedRowKeys: joined.table.rowKeys?.filter((_, index) => joined.rightIds[index] === null), animateCombine: true });
+    const joinSql = `${analysis.join.type} JOIN ${quoteIdentifier(analysis.join.right.table)} ON ${quoteIdentifier(analysis.join.left.table)}.${quoteIdentifier(analysis.join.left.column)} = ${quoteIdentifier(analysis.join.right.table)}.${quoteIdentifier(analysis.join.right.column)}`;
+    steps.push({ id: "join", kind: "join", title: analysis.join.type === "LEFT" ? "Preserve left rows and match" : "Match related rows", clause: `${analysis.join.type} JOIN`, sqlFragment: joinSql, explanation: `${analysis.join.left.table}.${analysis.join.left.column} is compared with ${analysis.join.right.table}.${analysis.join.right.column}. SQLite forms ${joined.table.totalRows ?? joined.table.values.length} matching row combination${(joined.table.totalRows ?? joined.table.values.length) === 1 ? "" : "s"}; one source row may contribute to several combinations. ${analysis.join.type === "LEFT" ? `${unmatchedLeft.length} left-side row${unmatchedLeft.length === 1 ? " has" : "s have"} no match, so SQLite supplies NULL for the right-side columns.` : "Only matching combinations continue."}`, table: joined.table, panels: sourcePanels(sources, analysis, { leftIds: leftMatches, rightIds: rightMatches, unmatchedLeftIds: unmatchedLeft }), unmatchedRowKeys: joined.table.rowKeys?.filter((_, index) => joined.rightIds[index] === null), rowTone: "related", animateCombine: true });
     if (ast.where) {
       const rawAfterWhere = await execute(queryWith(ast, { columns: joinRawColumns(analysis), distinct: null, groupby: undefined, having: null, orderby: null, limit: null }));
-      steps.push({ id: "filter", kind: "filter", title: "Filter joined combinations", clause: "WHERE", explanation: `SQLite evaluates ${parser.exprToSQL(ast.where)} after the join. TRUE combinations stay highlighted; FALSE and NULL combinations are dimmed.`, table: joined.table, matchingRowKeys: stripJoinIds(rawAfterWhere).table.rowKeys });
+      matchingRowKeys = stripJoinIds(rawAfterWhere).table.rowKeys;
+      const predicate = parser.exprToSQL(ast.where);
+      steps.push({ id: "filter", kind: "filter", title: "Filter joined combinations", clause: "WHERE", sqlFragment: `WHERE ${predicate}`, explanation: `SQLite evaluates ${predicate} after the join. ${matchingRowKeys?.length ?? 0} of ${joined.table.totalRows ?? joined.table.values.length} joined combinations evaluate to TRUE. FALSE and NULL combinations are dimmed.`, table: joined.table, matchingRowKeys });
     }
   } else if (ast.where) {
     const matches = await execute(queryWith(ast, { columns: [rowIdColumn(analysis.tableAlias, "__qq_rowid__")], distinct: null, orderby: null, limit: null, groupby: undefined, having: null }));
-    steps.push({ id: "filter", kind: "filter", title: "Evaluate the predicate", clause: "WHERE", explanation: `SQLite evaluates ${parser.exprToSQL(ast.where)} for each row. TRUE rows stay highlighted; FALSE and NULL rows are dimmed.`, table: workingTable, matchingRowIds: matches.values.map((row) => Number(row[0])) });
+    matchingRowIds = matches.values.map((row) => Number(row[0]));
+    const predicate = parser.exprToSQL(ast.where);
+    steps.push({ id: "filter", kind: "filter", title: "Evaluate the predicate", clause: "WHERE", sqlFragment: `WHERE ${predicate}`, explanation: `SQLite evaluates ${predicate} for each row. ${matchingRowIds.length} of ${workingTable.totalRows ?? workingTable.values.length} rows evaluate to TRUE. FALSE and NULL results are dimmed.`, table: workingTable, matchingRowIds });
   }
 
   const grouped = analysis.groupBy.length > 0 || analysis.aggregates.length > 0;
@@ -561,18 +628,21 @@ async function createAdvancedSelectPlan(sql: string, ast: Select, analysis: Visu
     const items = parseSelectItems(ast.columns as Column[], analysis.sourceTables);
     const groups = groupSummaries(fullContributionView, analysis, aggregateResult, items);
     const contributionView = capTable(fullContributionView);
-    steps.push({ id: "group", kind: "group", title: analysis.groupBy.length ? "Form groups with equal keys" : "Form one aggregate group", clause: analysis.groupBy.length ? "GROUP BY" : "GROUP", explanation: analysis.groupBy.length ? `Rows with equal ${analysis.groupBy.map(refLabel).join(", ")} values are placed into the same logical group. Colored bands show which rows contribute together.` : "Without GROUP BY, all qualifying rows contribute to one aggregate group.", table: contributionView, highlightedColumns: contributionLabels.slice(0, analysis.groupBy.length), groups });
-    steps.push({ id: "aggregate", kind: "aggregate", title: "Calculate each aggregate", clause: "AGGREGATE", explanation: `SQLite calculates ${analysis.aggregates.map((aggregate) => aggregate.output).join(", ")} independently for every group. COUNT(column) ignores NULL, while SUM, AVG, MIN, and MAX use SQLite’s native value rules.`, table: tableFromResult(aggregateResult), groups });
+    steps.push({ id: "group", kind: "group", title: analysis.groupBy.length ? "Form groups with equal keys" : "Form one aggregate group", clause: analysis.groupBy.length ? "GROUP BY" : "GROUP", sqlFragment: analysis.groupBy.length ? `GROUP BY ${analysis.groupBy.map(refLabel).join(", ")}` : "Aggregate all qualifying rows", explanation: analysis.groupBy.length ? `Rows with equal ${analysis.groupBy.map(refLabel).join(", ")} values are placed into the same logical group. ${groups.length} logical group${groups.length === 1 ? " is" : "s are"} formed; colored bands show which rows contribute together.` : "Without GROUP BY, all qualifying rows contribute to one aggregate group.", table: contributionView, highlightedColumns: contributionLabels.slice(0, analysis.groupBy.length), groups });
+    steps.push({ id: "aggregate", kind: "aggregate", title: "Calculate each aggregate", clause: "AGGREGATE", sqlFragment: analysis.aggregates.map((aggregate) => `${aggregate.function}(${aggregate.column}) AS ${aggregate.output}`).join(", "), explanation: `SQLite calculates ${analysis.aggregates.map((aggregate) => aggregate.output).join(", ")} independently for every group. COUNT(*) counts rows; COUNT(column), SUM, AVG, MIN, and MAX ignore NULL inputs.`, table: tableFromResult(aggregateResult), groups });
   } else {
     const projected = await execute(queryWith(ast, { orderby: null, limit: null }));
-    steps.push({ id: "project", kind: "project", title: "Choose output columns", clause: "SELECT", explanation: "SELECT projects the requested columns from each surviving row combination. Output aliases become the displayed column labels.", table: tableFromResult(projected), highlightedColumns: projected.columns });
+    const selectFragment = selectClauseSql(ast);
+    steps.push({ id: "project-highlight", kind: "project", title: "Highlight selected columns", clause: "SELECT", sqlFragment: selectFragment, explanation: `First, highlight ${selectedSourceColumns(analysis).join(", ")} in the participating source tables. This keeps the origin of each selected value visible before projection.`, table: workingTable, matchingRowIds, matchingRowKeys, highlightedColumns: selectedSourceColumns(analysis), panels: projectionPanels(sources, analysis), projectionPhase: "highlight" });
+    const projectedTable = tableFromResult(projected);
+    steps.push({ id: "project-apply", kind: "project", title: "Apply the projection", clause: "SELECT", sqlFragment: selectFragment, explanation: "Now SELECT produces the requested output columns from each surviving row combination. Output aliases become the displayed column labels.", table: projectedTable, highlightedColumns: projectedTable.columns, projectionPhase: "apply", animateCombine: true });
   }
 
   await appendResultStages(ast, analysis, steps, execute);
   const visualizedResult = await execute(parser.sqlify(clone(ast), { database: "sqlite" }));
   const finalResult = await execute(sql);
   const validated = resultsEqual(visualizedResult, finalResult);
-  steps.push({ id: "result", kind: "result", title: "Final SQLite result", clause: "RESULT", explanation: `The full teaching result is compared with SQLite’s actual output: ${finalResult.rowCount} row${finalResult.rowCount === 1 ? "" : "s"} returned.`, table: tableFromResult(finalResult) });
+  steps.push({ id: "result", kind: "result", title: "Final SQLite result", clause: "RESULT", sqlFragment: "Validated against SQLite", explanation: `The full teaching result is compared with SQLite’s actual output: ${finalResult.rowCount} row${finalResult.rowCount === 1 ? "" : "s"} returned.`, table: tableFromResult(finalResult) });
   return finalPlan(sql, analysis, sources, finalResult, steps, validated);
 }
 
@@ -636,24 +706,24 @@ export async function createMutationVisualizationPlan(
   const focusIds = analysis.statementType === "insert" ? insertedIds : targetIds;
   const before = focusRows(beforeFull, focusIds);
   const expectedAfter = focusRows(expectedAfterFull, focusIds);
-  const steps: VisualizationStep[] = [{ id: "source", kind: "source", title: `State before ${analysis.statementType.toUpperCase()}`, clause: "BEFORE", explanation: `This is the checkpoint-protected state of ${analysis.tableName} before the statement runs. Replaying this visualization only replays these captured steps.`, table: before }];
+  const steps: VisualizationStep[] = [{ id: "source", kind: "source", title: `State before ${analysis.statementType.toUpperCase()}`, clause: "BEFORE", sqlFragment: `Captured state: ${analysis.tableName}`, explanation: `This is the checkpoint-protected state of ${analysis.tableName} before the statement runs. Replaying this visualization only replays these captured steps.`, table: before }];
 
   if (analysis.statementType === "insert") {
-    steps.push({ id: "insert", kind: "insert", title: "Insert the new records", clause: "INSERT", explanation: `SQLite adds ${insertedIds.length} new row${insertedIds.length === 1 ? "" : "s"}. Green highlighting distinguishes the inserted records from the pre-existing table.`, table: expectedAfter, highlightedRowIds: insertedIds, highlightedColumns: analysis.mutationColumns, rowTone: "insert", animateCombine: true });
+    steps.push({ id: "insert", kind: "insert", title: "Insert the new records", clause: "INSERT", sqlFragment: sql.trim(), explanation: `SQLite adds ${insertedIds.length} new row${insertedIds.length === 1 ? "" : "s"}. Green highlighting distinguishes the inserted records from the pre-existing table.`, table: expectedAfter, highlightedRowIds: insertedIds, highlightedColumns: analysis.mutationColumns, rowTone: "insert", animateCombine: true });
   } else if (analysis.statementType === "update") {
-    steps.push({ id: "update-before", kind: "update-before", title: "Locate rows to update", clause: "WHERE", explanation: `${targetIds.length} row${targetIds.length === 1 ? " matches" : "s match"} the UPDATE predicate. The highlighted columns are the fields named by SET.`, table: before, highlightedRowIds: targetIds, highlightedColumns: analysis.mutationColumns, rowTone: "update" });
+    steps.push({ id: "update-before", kind: "update-before", title: "Locate rows to update", clause: "WHERE", sqlFragment: sql.trim(), explanation: `${targetIds.length} row${targetIds.length === 1 ? " matches" : "s match"} the UPDATE predicate. The highlighted columns are the fields named by SET.`, table: before, highlightedRowIds: targetIds, highlightedColumns: analysis.mutationColumns, rowTone: "update" });
     const changes = changedCells(beforeFull, expectedAfterFull, targetIds, analysis.mutationColumns);
-    steps.push({ id: "update-after", kind: "update-after", title: "Apply the new cell values", clause: "UPDATE", explanation: `${changes.length} cell value${changes.length === 1 ? " changes" : "s change"}. Each highlighted cell shows its captured before value alongside SQLite’s resulting value.`, table: expectedAfter, highlightedRowIds: targetIds, highlightedColumns: analysis.mutationColumns, cellChanges: changes, rowTone: "update" });
+    steps.push({ id: "update-after", kind: "update-after", title: "Apply the new cell values", clause: "UPDATE", sqlFragment: sql.trim(), explanation: `${changes.length} cell value${changes.length === 1 ? " changes" : "s change"}. Each highlighted cell shows its captured before value alongside SQLite’s resulting value.`, table: expectedAfter, highlightedRowIds: targetIds, highlightedColumns: analysis.mutationColumns, cellChanges: changes, rowTone: "update" });
   } else {
-    steps.push({ id: "delete-before", kind: "delete-before", title: "Identify rows to remove", clause: "DELETE", explanation: `${targetIds.length} affected row${targetIds.length === 1 ? " is" : "s are"} highlighted red before any data is removed.`, table: before, highlightedRowIds: targetIds, rowTone: "delete" });
-    steps.push({ id: "delete-after", kind: "delete-after", title: "Remove the affected rows", clause: "AFTER", explanation: `The ${targetIds.length} highlighted row${targetIds.length === 1 ? " is" : "s are"} absent from the captured after-state. Undo can restore the real checkpoint.`, table: expectedAfter, rowTone: "delete", animateCombine: true });
+    steps.push({ id: "delete-before", kind: "delete-before", title: "Identify rows to remove", clause: "DELETE", sqlFragment: sql.trim(), explanation: `${targetIds.length} affected row${targetIds.length === 1 ? " is" : "s are"} highlighted red before any data is removed.`, table: before, highlightedRowIds: targetIds, rowTone: "delete" });
+    steps.push({ id: "delete-after", kind: "delete-after", title: "Remove the affected rows", clause: "AFTER", sqlFragment: "Captured state after DELETE", explanation: `The ${targetIds.length} highlighted row${targetIds.length === 1 ? " is" : "s are"} absent from the captured after-state. Undo can restore the real checkpoint.`, table: expectedAfter, rowTone: "delete", animateCombine: true });
   }
 
   const mutationResult = await executeMutation();
   const actualAfterRaw = await executeRead(tableSql);
   const validated = resultsEqual(afterRaw, actualAfterRaw);
   const finalResult = resultWithoutRowId(actualAfterRaw);
-  steps.push({ id: "result", kind: "result", title: "Validated database state", clause: "RESULT", explanation: `The previewed after-state matches the real checkpointed SQLite database. ${mutationResult.rowsAffected} row${mutationResult.rowsAffected === 1 ? " was" : "s were"} reported affected.`, table: focusRows(rowIdTable(actualAfterRaw), focusIds) });
+  steps.push({ id: "result", kind: "result", title: "Validated database state", clause: "RESULT", sqlFragment: "Validated against SQLite", explanation: `The previewed after-state matches the real checkpointed SQLite database. ${mutationResult.rowsAffected} row${mutationResult.rowsAffected === 1 ? " was" : "s were"} reported affected. Replaying these captured steps does not execute the modification again.`, table: focusRows(rowIdTable(actualAfterRaw), focusIds) });
   const sources: VisualizationSourceTable[] = [{ tableName: analysis.tableName, alias: analysis.tableAlias, table: before }];
   return finalPlan(sql, analysis, sources, finalResult, steps, validated, mutationResult);
 }

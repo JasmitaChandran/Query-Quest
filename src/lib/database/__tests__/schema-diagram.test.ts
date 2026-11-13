@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { automaticDiagramPositions, detectSchemaRelationships, mergeDiagramPositions } from "@/lib/database/schema-diagram";
+import {
+  automaticDiagramPositions,
+  detectSchemaRelationships,
+  estimatedSchemaNodeHeight,
+  mergeDiagramPositions,
+  relatedSchemaTables,
+} from "@/lib/database/schema-diagram";
 import type { TableSchema, TableSummary } from "@/lib/database/types";
 
 const tables: TableSummary[] = [
@@ -37,18 +43,22 @@ describe("schema diagram metadata", () => {
   it("creates only declared SQLite foreign-key relationships and detects cardinality", () => {
     const relationships = detectSchemaRelationships(tables, schemas);
     expect(relationships).toEqual([
-      expect.objectContaining({ parentTable: "Departments", childTable: "Students", childColumns: ["department_id"], cardinality: "one-to-many" }),
-      expect.objectContaining({ parentTable: "Students", childTable: "Profiles", childColumns: ["student_id"], cardinality: "one-to-one" }),
+      expect.objectContaining({ parentTable: "Departments", childTable: "Students", childColumns: ["department_id"], cardinality: "one-to-many", onDelete: "CASCADE", onUpdate: "NO ACTION" }),
+      expect.objectContaining({ parentTable: "Students", childTable: "Profiles", childColumns: ["student_id"], cardinality: "one-to-one", onDelete: "CASCADE", onUpdate: "CASCADE" }),
     ]);
     expect(relationships.some((relationship) => relationship.parentTable === "Independent" || relationship.childTable === "Independent")).toBe(false);
+    expect([...relatedSchemaTables(relationships, "Students")].sort()).toEqual(["Departments", "Profiles"]);
   });
 
   it("places parent tables before children and preserves saved coordinates", () => {
     const relationships = detectSchemaRelationships(tables, schemas);
-    const automatic = automaticDiagramPositions(tables, relationships);
+    const automatic = automaticDiagramPositions(tables, relationships, schemas);
     expect(automatic.Departments.x).toBeLessThan(automatic.Students.x);
     expect(automatic.Students.x).toBeLessThan(automatic.Profiles.x);
-    const merged = mergeDiagramPositions(tables, relationships, { Students: { x: 999, y: 321 }, RemovedTable: { x: 1, y: 1 } });
+    expect(Math.abs(automatic.Independent.y - automatic.Departments.y)).toBeGreaterThanOrEqual(
+      estimatedSchemaNodeHeight(schemas.Departments),
+    );
+    const merged = mergeDiagramPositions(tables, relationships, { Students: { x: 999, y: 321 }, RemovedTable: { x: 1, y: 1 } }, schemas);
     expect(merged.Students).toEqual({ x: 999, y: 321 });
     expect(merged).not.toHaveProperty("RemovedTable");
     expect(merged.Departments).toEqual(automatic.Departments);

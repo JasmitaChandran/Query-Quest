@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Download, MoreHorizontal, Pencil, Trash2, TriangleAlert } from "lucide-react";
+import { Database, Download, Info, MoreHorizontal, Pencil, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ export function DatabaseActionsMenu({ database }: { database: DatabaseMetadata }
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [renameOpen, setRenameOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
   const [name, setName] = React.useState(database.name);
   const [confirmation, setConfirmation] = React.useState("");
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -105,9 +106,11 @@ export function DatabaseActionsMenu({ database }: { database: DatabaseMetadata }
       >
         <MoreHorizontal />
       </Button>
-      {menuOpen ? <div role="menu" aria-label={`Actions for ${database.name}`} className="absolute right-0 top-9 z-30 w-48 rounded-lg border border-border bg-popover p-1.5 shadow-xl">
-        <button type="button" role="menuitem" onClick={() => void handleDownload()} className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition hover:bg-hover"><Download className="size-3.5" />Download SQLite</button>
+      {menuOpen ? <div role="menu" aria-label={`Actions for ${database.name}`} className="absolute right-0 top-9 z-30 w-52 rounded-lg border border-border bg-popover p-1.5 shadow-xl">
         <button type="button" role="menuitem" onClick={openRenameDialog} className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition hover:bg-hover"><Pencil className="size-3.5" />Rename Database</button>
+        <button type="button" role="menuitem" onClick={() => void handleDownload()} className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition hover:bg-hover"><Download className="size-3.5" />Export Database</button>
+        <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setDetailsOpen(true); }} className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] transition hover:bg-hover"><Info className="size-3.5" />Database Details</button>
+        <div className="my-1 border-t border-border" />
         <button type="button" role="menuitem" onClick={openDeleteDialog} className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-destructive transition hover:bg-destructive-tint"><Trash2 className="size-3.5" />Delete Database</button>
       </div> : null}
     </div>
@@ -149,5 +152,29 @@ export function DatabaseActionsMenu({ database }: { database: DatabaseMetadata }
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <div className="grid size-11 place-items-center rounded-xl bg-selected text-selected-foreground"><Database className="size-5" /></div>
+          <DialogTitle>{database.name}</DialogTitle>
+          <DialogDescription>Browser-local metadata for this logical SQLite database.</DialogDescription>
+        </DialogHeader>
+        <dl className="grid gap-3 rounded-xl border bg-surface p-4 text-[13px] sm:grid-cols-2">
+          <div><dt className="text-xs text-muted-foreground">Source</dt><dd className="mt-1 font-medium capitalize">{database.source}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">Size</dt><dd className="mt-1 font-medium">{formatBytes(database.sizeBytes)}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">Created</dt><dd className="mt-1 font-medium">{new Date(database.createdAt).toLocaleString()}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">Last updated</dt><dd className="mt-1 font-medium">{new Date(database.updatedAt).toLocaleString()}</dd></div>
+          <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">Stable internal identifier</dt><dd className="mt-1 break-all font-mono text-xs">{database.id}</dd></div>
+        </dl>
+        <DialogFooter><Button type="button" variant="outline" onClick={() => setDetailsOpen(false)}>Done</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   </>;
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 }

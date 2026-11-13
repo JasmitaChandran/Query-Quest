@@ -26,6 +26,7 @@ import type {
 } from "@/lib/database/types";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import type { ConvertedMySqlDump } from "@/lib/import/mysql-dump";
+import { quoteIdentifier } from "@/lib/database/visual-sql";
 
 type DatabaseStatus = "idle" | "initializing" | "ready" | "error";
 
@@ -68,6 +69,7 @@ type DatabaseState = {
   saveQuery: (name: string, sql: string, queryId?: string) => Promise<void>;
   deleteSavedQuery: (queryId: string) => Promise<void>;
   exportDatabase: (databaseId: string) => Promise<{ metadata: DatabaseMetadata; bytes: Uint8Array }>;
+  exportTable: (tableName: string) => Promise<QueryResult>;
   refreshWorkspaceMetadata: () => Promise<void>;
   switchDatabase: (databaseId: string) => Promise<void>;
   selectTable: (tableName: string) => Promise<void>;
@@ -85,9 +87,9 @@ type DatabaseState = {
   saveResultAsTable: (tableName: string) => Promise<void>;
   visualizeQuery: (sql: string) => Promise<void>;
   previewSqlite: (bytes: Uint8Array) => Promise<DatabaseImportPreview>;
-  importSqlite: (name: string, bytes: Uint8Array) => Promise<void>;
-  importMySql: (name: string, dump: ConvertedMySqlDump) => Promise<void>;
-  importDataset: (input: { databaseName: string; tableName: string; columns: DatasetColumn[]; rows: SqlValue[][] }) => Promise<void>;
+  importSqlite: (name: string, bytes: Uint8Array, replaceDatabaseId?: string) => Promise<void>;
+  importMySql: (name: string, dump: ConvertedMySqlDump, replaceDatabaseId?: string) => Promise<void>;
+  importDataset: (input: { databaseName: string; tableName: string; columns: DatasetColumn[]; rows: SqlValue[][]; replaceDatabaseId?: string }) => Promise<void>;
   clearError: () => void;
 };
 
@@ -210,6 +212,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
     },
 
     createWorkspace: async (name) => {
+      if (!useWorkspaceStore.getState().confirmDiscardPendingDataEdits()) return;
       set({ isMutating: true, error: null });
       try {
         const snapshot = await getDatabaseManager().createWorkspace(name);
@@ -221,6 +224,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
 
     switchWorkspace: async (workspaceId) => {
       if (workspaceId === get().activeWorkspaceId) return;
+      if (!useWorkspaceStore.getState().confirmDiscardPendingDataEdits()) return;
       set({ isTableLoading: true, error: null });
       try {
         const snapshot = await getDatabaseManager().switchWorkspace(workspaceId);
@@ -239,6 +243,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
     },
 
     deleteWorkspace: async (workspaceId) => {
+      if (workspaceId === get().activeWorkspaceId && !useWorkspaceStore.getState().confirmDiscardPendingDataEdits()) return;
       set({ isMutating: true, error: null });
       try {
         const snapshot = await getDatabaseManager().deleteWorkspace(workspaceId);
@@ -256,6 +261,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
     exportWorkspace: () => getDatabaseManager().exportWorkspace(),
 
     importWorkspace: async (workspace, overwrite = false) => {
+      if (!useWorkspaceStore.getState().confirmDiscardPendingDataEdits()) return;
       set({ isImporting: true, error: null });
       try {
         const snapshot = await getDatabaseManager().importWorkspace(workspace, overwrite);
@@ -278,10 +284,16 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
 
     exportDatabase: (databaseId) => getDatabaseManager().exportDatabaseFile(databaseId),
 
+    exportTable: (tableName) =>
+      getDatabaseManager().executeReadOnlyQuery(
+        `SELECT * FROM ${quoteIdentifier(tableName)}`,
+      ),
+
     refreshWorkspaceMetadata: hydrateWorkspaceMetadata,
 
     switchDatabase: async (databaseId) => {
       if (databaseId === get().activeDatabaseId) return;
+      if (!useWorkspaceStore.getState().confirmDiscardPendingDataEdits()) return;
       set({ isTableLoading: true, error: null });
       try {
         const snapshot = await getDatabaseManager().switchDatabase(databaseId);
@@ -290,13 +302,17 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
           activeDatabaseId: snapshot.activeDatabaseId,
         });
         await hydrateActiveDatabase();
-        await syncCheckpointStatus();
+        await Promise.all([syncCheckpointStatus(), hydrateWorkspaceMetadata()]);
       } catch (error) {
         set({ isTableLoading: false, error: errorMessage(error) });
       }
     },
 
-    selectTable: loadTable,
+    selectTable: async (tableName) => {
+      if (tableName === get().selectedTable) return;
+      if (!useWorkspaceStore.getState().confirmDiscardPendingDataEdits()) return;
+      await loadTable(tableName);
+    },
 
     runQuery: async (sql) => {
       set({ isQueryRunning: true, error: null, queryError: null, visualizationPlan: null, visualizationError: null });
@@ -307,7 +323,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
               (table) => table.name.toLowerCase() === fromMatch[1].toLowerCase(),
             )
           : null;
-        if (sourceTable && sourceTable.name !== get().selectedTable) {
+        if (sourceTable && sourceTable.name !== get().selectedTable && useWorkspaceStore.getState().pendingDataEdits === 0) {
           await loadTable(sourceTable.name);
         }
         const execution = await getDatabaseManager().executeUserQuery(sql);
@@ -323,6 +339,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
     },
 
     createDatabase: async (name) => {
+      if (!useWorkspaceStore.getState().confirmDiscardPendingDataEdits()) return;
       set({ isImporting: true, error: null });
       try {
         const snapshot = await getDatabaseManager().createDatabase(name);
@@ -332,7 +349,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
           isImporting: false,
         });
         await hydrateActiveDatabase();
-        await syncCheckpointStatus();
+        await Promise.all([syncCheckpointStatus(), hydrateWorkspaceMetadata()]);
       } catch (error) {
         set({ isImporting: false, error: errorMessage(error) });
         throw error;
@@ -427,6 +444,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
         await getDatabaseManager().applyTableEdits(tableName, edits);
         await hydrateActiveDatabase(tableName);
         await syncCheckpointStatus();
+        useWorkspaceStore.getState().setPendingDataEdits(0);
         set({ isMutating: false });
       } catch (error) {
         set({ isMutating: false, error: errorMessage(error) });
@@ -518,12 +536,14 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
 
     previewSqlite: (bytes) => getDatabaseManager().inspectSqliteDatabase(bytes),
 
-    importSqlite: async (name, bytes) => {
+    importSqlite: async (name, bytes, replaceDatabaseId) => {
+      if (!useWorkspaceStore.getState().confirmDiscardPendingDataEdits()) return;
       set({ isImporting: true, error: null });
       try {
         const snapshot = await getDatabaseManager().loadDatabase({
           name,
           bytes,
+          replaceDatabaseId,
         });
         set({
           databases: snapshot.databases,
@@ -531,20 +551,21 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
           isImporting: false,
         });
         await hydrateActiveDatabase();
-        await syncCheckpointStatus();
+        await Promise.all([syncCheckpointStatus(), hydrateWorkspaceMetadata()]);
       } catch (error) {
         set({ isImporting: false, error: errorMessage(error) });
         throw error;
       }
     },
 
-    importMySql: async (name, dump) => {
+    importMySql: async (name, dump, replaceDatabaseId) => {
+      if (!useWorkspaceStore.getState().confirmDiscardPendingDataEdits()) return;
       set({ isImporting: true, error: null });
       try {
-        const snapshot = await getDatabaseManager().importMySqlDump(name, dump);
+        const snapshot = await getDatabaseManager().importMySqlDump(name, dump, replaceDatabaseId);
         set({ databases: snapshot.databases, activeDatabaseId: snapshot.activeDatabaseId, isImporting: false });
         await hydrateActiveDatabase();
-        await syncCheckpointStatus();
+        await Promise.all([syncCheckpointStatus(), hydrateWorkspaceMetadata()]);
       } catch (error) {
         set({ isImporting: false, error: errorMessage(error) });
         throw error;
@@ -552,12 +573,13 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
     },
 
     importDataset: async (input) => {
+      if (!useWorkspaceStore.getState().confirmDiscardPendingDataEdits()) return;
       set({ isImporting: true, error: null });
       try {
         const snapshot = await getDatabaseManager().createDatabaseFromDataset(input);
         set({ databases: snapshot.databases, activeDatabaseId: snapshot.activeDatabaseId, isImporting: false });
         await hydrateActiveDatabase();
-        await syncCheckpointStatus();
+        await Promise.all([syncCheckpointStatus(), hydrateWorkspaceMetadata()]);
       } catch (error) {
         set({ isImporting: false, error: errorMessage(error) });
         throw error;

@@ -30,6 +30,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   editorSql: DEFAULT_SQL_QUERY,
   activePanel: "editor",
   explorerCollapsed: false,
+  explorerWidth: 270,
 };
 
 type StoredDatabase = { id: string; metadata: DatabaseMetadata; bytes: ArrayBuffer };
@@ -50,6 +51,7 @@ export interface DatabasePersistence {
   getCheckpointState(databaseId: string): Promise<DatabaseCheckpointState | null>;
   putCheckpointState(state: DatabaseCheckpointState): Promise<void>;
   putDatabaseAndCheckpoint(database: PersistedDatabase, state: DatabaseCheckpointState): Promise<void>;
+  replaceDatabaseData(database: PersistedDatabase, state: DatabaseCheckpointState, workspaceId?: string): Promise<void>;
   getQueryHistory(workspaceId?: string): Promise<QueryHistoryEntry[]>;
   putQueryHistoryEntry(entry: QueryHistoryEntry, limit?: number): Promise<void>;
   getDiagramPositions(databaseId: string): Promise<DiagramPositions>;
@@ -208,6 +210,33 @@ export class IndexedDbDatabaseStore implements DatabasePersistence {
     const transaction = database.transaction([DATABASE_STORE, CHECKPOINTS_STORE], "readwrite");
     transaction.objectStore(DATABASE_STORE).put(encodeDatabase(databaseToStore));
     transaction.objectStore(CHECKPOINTS_STORE).put(encodeCheckpoint(state));
+    await transactionToPromise(transaction);
+  }
+
+  async replaceDatabaseData(
+    databaseToStore: PersistedDatabase,
+    state: DatabaseCheckpointState,
+    workspaceId = DEFAULT_WORKSPACE_ID,
+  ) {
+    const database = await this.openDatabase();
+    const transaction = database.transaction(
+      [DATABASE_STORE, CHECKPOINTS_STORE, QUERY_HISTORY_STORE, DIAGRAM_LAYOUTS_STORE, SETTINGS_STORE],
+      "readwrite",
+    );
+    transaction.objectStore(DATABASE_STORE).put(encodeDatabase(databaseToStore));
+    transaction.objectStore(CHECKPOINTS_STORE).put(encodeCheckpoint(state));
+    transaction.objectStore(DIAGRAM_LAYOUTS_STORE).delete(databaseToStore.metadata.id);
+    const historyStore = transaction.objectStore(QUERY_HISTORY_STORE);
+    const history = await requestToPromise(
+      historyStore.getAll() as IDBRequest<QueryHistoryEntry[]>,
+    );
+    history
+      .filter((entry) => entry.databaseId === databaseToStore.metadata.id)
+      .forEach((entry) => historyStore.delete(entry.id));
+    transaction.objectStore(SETTINGS_STORE).put({
+      key: activeDatabaseKey(workspaceId),
+      value: databaseToStore.metadata.id,
+    } satisfies StoredSetting);
     await transactionToPromise(transaction);
   }
 

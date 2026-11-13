@@ -57,6 +57,7 @@ export interface VisualizationStep {
   title: string;
   clause: string;
   explanation: string;
+  sqlFragment?: string;
   table: VisualizationTable;
   matchingRowIds?: number[];
   matchingRowKeys?: string[];
@@ -67,7 +68,8 @@ export interface VisualizationStep {
   panels?: VisualizationPanel[];
   cellChanges?: VisualizationCellChange[];
   groups?: VisualizationGroupSummary[];
-  rowTone?: "insert" | "update" | "delete";
+  rowTone?: "insert" | "update" | "delete" | "related";
+  projectionPhase?: "highlight" | "apply";
   animateReorder?: boolean;
   animateCombine?: boolean;
 }

@@ -9,7 +9,6 @@ import * as monacoEditor from "monaco-editor";
 import { format } from "sql-formatter";
 import {
   Braces,
-  CircleCheck,
   FileCode2,
   Keyboard,
   LoaderCircle,
@@ -373,20 +372,7 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
           <RotateCcw />
           <span className="hidden sm:inline">Clear</span>
         </Button>
-        <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="hidden items-center gap-1.5 sm:flex">
-            {status === "ready" ? (
-              <>
-                <CircleCheck className="size-3 text-success" /> SQLite ready
-              </>
-            ) : (
-              <>
-                <LoaderCircle className="size-3 animate-spin" /> Initializing
-              </>
-            )}
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-md border border-success/30 bg-success-tint px-2 py-1 text-xs font-semibold text-success"><ShieldCheck className="size-3" />Checkpoint protected</span>
-        </div>
+        <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1 rounded-md border border-success/30 bg-success-tint px-2 py-1 text-xs font-semibold text-success"><ShieldCheck className="size-3" />Checkpoint protected</span></div>
       </div>
 
       <div className={cn("min-h-[220px]", presentation ? "h-[calc(100%-7rem)]" : "h-[260px] md:h-[calc(100%-6rem)]")}>

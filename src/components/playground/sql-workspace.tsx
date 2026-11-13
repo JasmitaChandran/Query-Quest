@@ -4,8 +4,8 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import {
   AlertCircle,
+  ChevronDown,
   ChevronRight,
-  Clock3,
   Code2,
   Columns3,
   Database,
@@ -13,9 +13,8 @@ import {
   FileDatabase,
   HardDrive,
   History,
-  Info,
   KeyRound,
-  LockKeyhole,
+  Link2,
   PanelLeftClose,
   Rows3,
   Search,
@@ -41,6 +40,7 @@ import { QueryHistoryPanel } from "@/components/playground/query-history-panel";
 import { SaveResultDialog } from "@/components/playground/save-result-dialog";
 import { QueryVisualizer } from "@/components/playground/query-visualizer";
 import { DatabaseActionsMenu } from "@/components/playground/database-actions-menu";
+import { TableActionsMenu } from "@/components/playground/table-actions-menu";
 import { TableSchemaEditorDialog } from "@/components/playground/table-schema-editor-dialog";
 import { TeachingMode } from "@/components/playground/teaching-mode";
 import { WorkspaceManagerDialog } from "@/components/playground/workspace-manager-dialog";
@@ -74,11 +74,11 @@ const SchemaDiagram = dynamic(
 );
 
 const workspaceTabs = [
-  { id: "editor" as const, label: "Editor", icon: Code2, disabled: false },
-  { id: "visualizer" as const, label: "Query visualizer", icon: Waypoints, disabled: false },
-  { id: "data" as const, label: "Visual data", icon: Sparkles, disabled: false },
-  { id: "schema" as const, label: "Schema diagram", icon: Network, disabled: false },
-  { id: "history" as const, label: "Query history", icon: History, disabled: false },
+  { id: "editor" as const, label: "SQL Editor", icon: Code2 },
+  { id: "visualizer" as const, label: "Visualizer", icon: Waypoints },
+  { id: "data" as const, label: "Table Data", icon: Sparkles },
+  { id: "schema" as const, label: "ER Diagram", icon: Network },
+  { id: "history" as const, label: "History", icon: History },
 ];
 
 function ExplorerLoading() {
@@ -94,31 +94,77 @@ function ExplorerLoading() {
 
 function ExplorerSidebar() {
   const [schemaEditorTable, setSchemaEditorTable] = React.useState<string | null>(null);
-  const { explorerCollapsed, toggleExplorer } = useWorkspaceStore();
+  const [tableFilter, setTableFilter] = React.useState("");
+  const [expandedTables, setExpandedTables] = React.useState<Set<string>>(new Set());
+  const [collapsedSelectedKey, setCollapsedSelectedKey] = React.useState<string | null>(null);
+  const { explorerCollapsed, explorerWidth, toggleExplorer, setExplorerWidth } = useWorkspaceStore();
   const status = useDatabaseStore((state) => state.status);
   const databases = useDatabaseStore((state) => state.databases);
   const activeDatabaseId = useDatabaseStore((state) => state.activeDatabaseId);
+  const activeDatabase = databases.find((database) => database.id === activeDatabaseId);
   const tables = useDatabaseStore((state) => state.tables);
+  const tableSchemas = useDatabaseStore((state) => state.tableSchemas);
   const selectedTable = useDatabaseStore((state) => state.selectedTable);
-  const selectedSchema = useDatabaseStore((state) => state.selectedSchema);
   const switchDatabase = useDatabaseStore((state) => state.switchDatabase);
   const selectTable = useDatabaseStore((state) => state.selectTable);
+
+  const filteredTables = tables.filter((table) =>
+    table.name.toLocaleLowerCase().includes(tableFilter.trim().toLocaleLowerCase()),
+  );
+
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = explorerWidth;
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const move = (nextEvent: PointerEvent) =>
+      setExplorerWidth(startWidth + nextEvent.clientX - startX);
+    const stop = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", stop);
+      handle.removeEventListener("pointercancel", stop);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+  };
+
+  const toggleTable = async (tableName: string) => {
+    const tableKey = `${activeDatabaseId ?? "none"}:${tableName}`;
+    const currentlyExpanded = expandedTables.has(tableName) || (
+      selectedTable === tableName && collapsedSelectedKey !== tableKey
+    );
+    if (selectedTable !== tableName) {
+      await selectTable(tableName);
+      setCollapsedSelectedKey(null);
+    } else {
+      setCollapsedSelectedKey(currentlyExpanded ? tableKey : null);
+    }
+    setExpandedTables((current) => {
+      const next = new Set(current);
+      if (currentlyExpanded) next.delete(tableName);
+      else next.add(tableName);
+      return next;
+    });
+  };
 
   return (
     <aside
       className={cn(
-        "workspace-scrollbar relative shrink-0 border-b border-border bg-sidebar transition-[width] duration-200 md:border-b-0 md:border-r",
+        "relative shrink-0 border-b border-border bg-sidebar transition-[width] duration-200 md:border-b-0 md:border-r",
         explorerCollapsed
           ? "h-11 w-full overflow-hidden md:h-auto md:w-14"
-          : "h-72 w-full overflow-auto md:h-auto md:w-[280px] md:min-w-[230px] md:max-w-[440px] md:resize-x",
+          : "h-80 w-full overflow-hidden md:h-auto md:w-[var(--explorer-width)] md:min-w-[230px] md:max-w-[360px]",
       )}
+      style={{ "--explorer-width": `${explorerWidth}px` } as React.CSSProperties}
       aria-label="Database explorer"
     >
       <div className="sticky top-0 z-10 flex h-11 items-center justify-between border-b border-border bg-surface-elevated/95 px-3 backdrop-blur">
         {!explorerCollapsed ? (
-          <div className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground">
+          <div className="flex items-center gap-2 text-[13px] font-semibold">
             <FileDatabase className="size-4" />
-            Explorer
+            Database Explorer
           </div>
         ) : (
           <Database className="mx-auto hidden size-4 text-muted-foreground md:block" />
@@ -136,119 +182,62 @@ function ExplorerSidebar() {
       </div>
 
       {!explorerCollapsed ? (
-        <div className="flex min-h-[calc(100%-2.75rem)] flex-col">
-          <div className="border-b border-border p-3">
-            <p className="ui-kicker">Databases</p>
-            <div className="mt-2 grid gap-2 [&_button]:w-full">
-              <ImportDatabaseDialog />
-              <CreateDatabaseDialog />
-            </div>
-            <div className="workspace-scrollbar mt-2 max-h-36 space-y-1 overflow-y-auto rounded-xl border border-border bg-surface p-1.5">
-              {databases.length ? databases.map((database) => {
-                const active = database.id === activeDatabaseId;
-                return <div key={database.id} className={cn("flex items-center rounded-lg border border-transparent transition", active ? "border-primary/25 bg-selected text-selected-foreground" : "hover:bg-hover")}>
-                  <button type="button" onClick={() => void switchDatabase(database.id)} disabled={status !== "ready" || active} className="flex min-h-9 min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-[13px] disabled:cursor-default">
-                    <span className={cn("size-1.5 shrink-0 rounded-full", active ? "bg-primary ring-2 ring-primary/20" : "bg-muted-foreground/45")} />
-                    <span className="min-w-0 flex-1 truncate font-semibold">{database.name}</span>
-                    {active ? <span className="text-xs font-semibold uppercase tracking-wide">Active</span> : null}
-                  </button>
-                  <DatabaseActionsMenu database={database} />
-                </div>;
-              }) : <p className="px-2 py-3 text-center text-xs text-muted-foreground">No databases yet.</p>}
-            </div>
-            <div className="mt-2 flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-muted-foreground">
-              <Search className="size-3.5" />
-              <span className="text-xs">{activeDatabaseId ? `${tables.length} tables and views` : "Select or create a database"}</span>
-            </div>
-            {activeDatabaseId ? <div className="mt-2"><TableDesignerDialog /></div> : null}
-          </div>
-
-          {status === "initializing" || status === "idle" ? (
-            <ExplorerLoading />
-          ) : databases.length === 0 ? (
+        <div className="flex h-[calc(100%-2.75rem)] min-h-0 flex-col">
+          {status === "initializing" || status === "idle" ? <ExplorerLoading /> : databases.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center px-5 py-7 text-center">
               <div className="grid size-11 place-items-center rounded-2xl border border-border bg-muted/45 text-muted-foreground"><Database className="size-5" /></div>
               <p className="mt-4 text-sm font-semibold">No databases yet.</p>
               <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">Create an empty SQLite database or import one stored on your device.</p>
               <div className="mt-4 grid w-full max-w-64 grid-cols-1 gap-2 [&_button]:w-full"><ImportDatabaseDialog /><CreateDatabaseDialog /></div>
             </div>
-          ) : tables.length > 0 ? (
-            <div className="flex-1 p-2">
-              <p className="ui-kicker px-2 py-2">
-                Schema
-              </p>
-              <div className="space-y-0.5">
-                {tables.map((table) => {
-                  const active = selectedTable === table.name;
-                  return (
-                    <div key={table.name}>
-                      <button
-                        type="button"
-                        onClick={() => void selectTable(table.name)}
-                        onContextMenu={(event) => {
-                          if (table.type !== "table") return;
-                          event.preventDefault();
-                          if (!active) void selectTable(table.name);
-                          setSchemaEditorTable(table.name);
-                        }}
-                        className={cn(
-                          "flex min-h-9 w-full items-center gap-2 rounded-lg border border-transparent px-2.5 py-2 text-left text-[13px] transition hover:bg-hover",
-                          active && "border-primary/20 bg-selected text-selected-foreground",
-                        )}
-                      >
-                        <Table2 className="size-3.5 shrink-0" />
-                        <span className="min-w-0 flex-1 truncate font-medium">{table.name}</span>
-                        <span className="text-xs tabular-nums text-muted-foreground">
-                          {table.rowCount}
-                        </span>
-                      </button>
-                      {active && selectedSchema ? (
-                        <div className="ml-4 border-l border-border py-1 pl-3">
-                          {selectedSchema.columns.map((column) => (
-                            <div
-                              key={column.name}
-                              className="flex min-h-7 items-center gap-2 py-1 text-xs text-muted-foreground"
-                            >
-                              {column.primaryKey ? (
-                                <KeyRound className="size-3 text-warning" />
-                              ) : (
-                                <Columns3 className="size-3" />
-                              )}
-                              <span className="min-w-0 flex-1 truncate">{column.name}</span>
-                              <span className="max-w-20 truncate font-mono text-xs text-muted-foreground">
-                                {column.type}
-                              </span>
-                            </div>
-                          ))}
-                          {table.type === "table" ? <Button type="button" variant="ghost" size="sm" className="mt-1 w-full justify-start px-2 text-xs text-muted-foreground hover:text-primary" onClick={() => setSchemaEditorTable(table.name)}><TableProperties className="size-3.5" />Edit schema</Button> : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           ) : (
-            <div className="flex flex-1 flex-col items-center justify-center px-5 py-7 text-center">
-              <div className="grid size-11 place-items-center rounded-2xl border border-border bg-muted/45 text-muted-foreground">
-                <Database className="size-5" />
-              </div>
-              <p className="mt-4 text-sm font-semibold">Empty database</p>
-              <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">
-                This logical database is ready for internal schema setup.
-              </p>
-            </div>
-          )}
+            <>
+              <section className="shrink-0 border-b border-border p-3">
+                <div className="flex items-center justify-between gap-2"><p className="ui-kicker">Databases <span className="text-muted-foreground">({databases.length})</span></p></div>
+                <div className="mt-2 grid grid-cols-2 gap-2 [&_button]:w-full"><ImportDatabaseDialog triggerLabel="Import" /><CreateDatabaseDialog triggerLabel="Create" /></div>
+                <div className="workspace-scrollbar mt-2 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-border bg-surface p-1.5">
+                  {databases.map((database) => {
+                    const active = database.id === activeDatabaseId;
+                    return <div key={database.id} className={cn("flex items-center rounded-lg border border-transparent transition", active ? "border-primary/25 bg-selected text-selected-foreground" : "hover:bg-hover")}>
+                      <button type="button" onClick={() => { setTableFilter(""); setExpandedTables(new Set()); setCollapsedSelectedKey(null); void switchDatabase(database.id); }} disabled={status !== "ready" || active} title={database.name} className="flex min-h-9 min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left text-[13px] disabled:cursor-default">
+                        {active ? <ChevronDown className="size-3.5 shrink-0 text-primary" /> : <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />}
+                        <span className="min-w-0 flex-1 truncate font-semibold">{database.name}</span>
+                        {active ? <span className="text-xs font-semibold uppercase tracking-wide">Active</span> : null}
+                      </button>
+                      <DatabaseActionsMenu database={database} />
+                    </div>;
+                  })}
+                </div>
+              </section>
 
-          <div className="sticky bottom-0 border-t border-border bg-surface-elevated/95 p-3 backdrop-blur">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="size-1.5 rounded-full bg-success" />
-              {databases.length} {databases.length === 1 ? "database" : "databases"}
-              <span className="ml-auto">IndexedDB</span>
-            </div>
-          </div>
+              <section className="flex min-h-0 flex-1 flex-col">
+                <div className="flex min-h-11 items-center gap-2 px-3 pt-1"><div className="min-w-0 flex-1"><p className="ui-kicker truncate" title={activeDatabase?.name}>Tables — {activeDatabase?.name}</p></div><TableDesignerDialog trigger={<Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2 text-xs"><Table2 className="size-3.5" />Create</Button>} /></div>
+                <label className="mx-3 mb-2 flex h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-muted-foreground"><Search className="size-3.5" /><input value={tableFilter} onChange={(event) => setTableFilter(event.target.value)} placeholder="Search tables…" className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none" /><span className="text-xs tabular-nums">{filteredTables.length}</span></label>
+                {tables.length === 0 ? <div className="flex flex-1 flex-col items-center justify-center px-5 py-7 text-center"><div className="grid size-11 place-items-center rounded-2xl border border-border bg-muted/45 text-muted-foreground"><Table2 className="size-5" /></div><p className="mt-4 text-sm font-semibold">No tables yet.</p><p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">Create the first table in {activeDatabase?.name}.</p><div className="mt-4"><TableDesignerDialog /></div></div> : <div className="workspace-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">{filteredTables.length ? <div className="space-y-1">{filteredTables.map((table) => {
+                  const selected = selectedTable === table.name;
+                  const expanded = expandedTables.has(table.name) || (
+                    selected && collapsedSelectedKey !== `${activeDatabaseId ?? "none"}:${table.name}`
+                  );
+                  const schema = tableSchemas[table.name];
+                  const foreignColumns = new Set(schema?.foreignKeys.map((foreignKey) => foreignKey.fromColumn) ?? []);
+                  return <div key={table.name} className={cn("overflow-visible rounded-lg border border-transparent", selected && "border-primary/20 bg-selected/55")}>
+                    <div className="flex items-center"><button type="button" onClick={() => void toggleTable(table.name)} title={table.name} className={cn("flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] transition hover:bg-hover", selected && "text-selected-foreground")}>
+                      {expanded ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}<Table2 className="size-3.5 shrink-0 text-primary" /><span className="min-w-0 flex-1 truncate font-medium">{table.name}</span><span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">{table.rowCount} rows</span>
+                    </button><TableActionsMenu table={table} onEditSchema={() => setSchemaEditorTable(table.name)} /></div>
+                    {expanded && schema ? <div className="ml-5 border-l border-border pb-1 pl-3 pr-2">{schema.columns.map((column) => {
+                      const foreignKey = foreignColumns.has(column.name);
+                      return <div key={column.name} className="flex min-h-7 items-center gap-2 py-1 text-xs text-muted-foreground">{column.primaryKey ? <KeyRound className="size-3 shrink-0 text-warning" aria-label="Primary key" /> : foreignKey ? <Link2 className="size-3 shrink-0 text-info" aria-label="Foreign key" /> : <Columns3 className="size-3 shrink-0" />}<span className="min-w-0 flex-1 truncate" title={column.name}>{column.name}</span><span className="max-w-20 truncate font-mono text-xs" title={column.type || "TEXT"}>{column.type || "TEXT"}</span>{column.primaryKey ? <span className="text-xs font-semibold text-warning">PK</span> : foreignKey ? <span className="text-xs font-semibold text-info">FK</span> : null}</div>;
+                    })}{table.type === "table" ? <Button type="button" variant="ghost" size="sm" className="mt-1 w-full justify-start px-2 text-xs text-muted-foreground hover:text-primary" onClick={() => setSchemaEditorTable(table.name)}><TableProperties className="size-3.5" />Edit schema</Button> : null}</div> : null}
+                  </div>;
+                })}</div> : <p className="px-3 py-8 text-center text-[13px] text-muted-foreground">No tables match “{tableFilter}”.</p>}</div>}
+              </section>
+
+              <div className="shrink-0 border-t border-border bg-surface-elevated/95 p-3 backdrop-blur"><div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="size-1.5 rounded-full bg-success" />{databases.length} {databases.length === 1 ? "database" : "databases"}<span className="ml-auto">IndexedDB</span></div></div>
+            </>
+          )}
         </div>
       ) : null}
+      {!explorerCollapsed ? <div role="separator" aria-orientation="vertical" aria-label="Resize database explorer" title="Drag to resize Database Explorer" onPointerDown={startResize} className="absolute inset-y-0 right-0 z-20 hidden w-1.5 cursor-col-resize touch-none bg-transparent transition hover:bg-primary/25 md:block" /> : null}
       <TableSchemaEditorDialog tableName={schemaEditorTable} open={Boolean(schemaEditorTable)} onOpenChange={(nextOpen) => { if (!nextOpen) setSchemaEditorTable(null); }} />
     </aside>
   );
@@ -338,6 +327,21 @@ function DataPanel({ kind, className }: { kind: "source" | "result"; className?:
   );
 }
 
+function EditorDatabaseContextBar() {
+  const databases = useDatabaseStore((state) => state.databases);
+  const activeDatabaseId = useDatabaseStore((state) => state.activeDatabaseId);
+  const status = useDatabaseStore((state) => state.status);
+  const switchDatabase = useDatabaseStore((state) => state.switchDatabase);
+
+  return <div className="flex min-h-10 flex-wrap items-center gap-2 border-b border-border bg-surface-elevated px-3 py-1.5 sm:px-4">
+    <Database className="size-3.5 text-primary" />
+    <label className="flex min-w-0 items-center gap-2 text-[13px] font-medium"><span className="text-muted-foreground">Database:</span><select aria-label="Active database" value={activeDatabaseId ?? ""} disabled={status !== "ready" || databases.length === 0} onChange={(event) => void switchDatabase(event.target.value)} className="h-8 max-w-64 min-w-0 rounded-lg border border-border bg-surface px-2 text-[13px] font-semibold text-foreground outline-none focus:border-primary">
+      {databases.length === 0 ? <option value="">No databases</option> : databases.map((database) => <option key={database.id} value={database.id}>{database.name}</option>)}
+    </select></label>
+    <span className="text-xs text-muted-foreground">Schemas and autocomplete update when the selection changes. SQL is not executed automatically.</span>
+  </div>;
+}
+
 function WorkspaceNavigation({ onEnterTeachingMode }: { onEnterTeachingMode: () => void }) {
   const { activePanel, setActivePanel } = useWorkspaceStore();
   const canUndo = useDatabaseStore((state) => state.canUndo);
@@ -362,16 +366,14 @@ function WorkspaceNavigation({ onEnterTeachingMode }: { onEnterTeachingMode: () 
           <button
             key={tab.id}
             type="button"
-            disabled={tab.disabled}
             onClick={() => setActivePanel(tab.id)}
             className={cn(
-              "relative inline-flex h-11 shrink-0 items-center gap-2 px-3 text-[13px] font-medium text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-55",
+              "relative inline-flex h-11 shrink-0 items-center gap-2 px-3 text-[13px] font-medium text-muted-foreground transition hover:text-foreground",
               active && "text-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary",
             )}
           >
             <Icon className="size-3.5" />
             {tab.label}
-            {tab.disabled ? <LockKeyhole className="size-2.5" /> : null}
           </button>
         );
       })}
@@ -381,10 +383,6 @@ function WorkspaceNavigation({ onEnterTeachingMode }: { onEnterTeachingMode: () 
         <Button variant="ghost" size="icon-sm" disabled={!canUndo || isMutating} onClick={() => void runAction("undo")} title="Undo database change" aria-label="Undo database change"><Undo2 /></Button>
         <Button variant="ghost" size="icon-sm" disabled={!canRedo || isMutating} onClick={() => void runAction("redo")} title="Redo database change" aria-label="Redo database change"><Redo2 /></Button>
         <Button variant="ghost" size="icon-sm" disabled={isMutating} onClick={() => void runAction("reset")} title="Reset database" aria-label="Reset database"><RotateCcw /></Button>
-      </div>
-      <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
-        <Info className="size-3" />
-        Worker-isolated SQLite
       </div>
     </div>
   );
@@ -415,16 +413,17 @@ export function SqlWorkspace() {
   const activePanel = useWorkspaceStore((state) => state.activePanel);
   const editorSql = useWorkspaceStore((state) => state.editorSql);
   const explorerCollapsed = useWorkspaceStore((state) => state.explorerCollapsed);
+  const explorerWidth = useWorkspaceStore((state) => state.explorerWidth);
   const activeWorkspaceId = useDatabaseStore((state) => state.activeWorkspaceId);
   const saveWorkspaceSettings = useDatabaseStore((state) => state.saveWorkspaceSettings);
 
   React.useEffect(() => {
     if (status !== "ready" || !activeWorkspaceId) return;
     const timeout = window.setTimeout(() => {
-      void saveWorkspaceSettings({ activePanel, editorSql, explorerCollapsed }).catch(() => undefined);
+      void saveWorkspaceSettings({ activePanel, editorSql, explorerCollapsed, explorerWidth }).catch(() => undefined);
     }, 400);
     return () => window.clearTimeout(timeout);
-  }, [activePanel, activeWorkspaceId, editorSql, explorerCollapsed, saveWorkspaceSettings, status]);
+  }, [activePanel, activeWorkspaceId, editorSql, explorerCollapsed, explorerWidth, saveWorkspaceSettings, status]);
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-background">
@@ -436,21 +435,25 @@ export function SqlWorkspace() {
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <ExplorerSidebar />
         <div className="min-w-0 flex-1">
-          {activePanel === "data" ? <VisualDataEditor /> : activePanel === "schema" ? <SchemaDiagram /> : activePanel === "visualizer" ? <QueryVisualizer /> : activePanel === "history" ? <QueryHistoryPanel /> : <><MonacoSqlEditor /><div className="flex min-h-[290px] flex-col divide-y divide-border md:flex-row md:divide-x md:divide-y-0"><DataPanel kind="source" className="md:resize-x md:overflow-auto" /><DataPanel kind="result" /></div></>}
+          <div hidden={activePanel !== "editor"}><EditorDatabaseContextBar /><MonacoSqlEditor /><div className="flex min-h-[290px] flex-col divide-y divide-border md:flex-row md:divide-x md:divide-y-0"><DataPanel kind="source" className="md:resize-x md:overflow-auto" /><DataPanel kind="result" /></div></div>
+          <div hidden={activePanel !== "visualizer"}><QueryVisualizer /></div>
+          <div hidden={activePanel !== "data"}><VisualDataEditor /></div>
+          <div hidden={activePanel !== "schema"}><SchemaDiagram /></div>
+          <div hidden={activePanel !== "history"}><QueryHistoryPanel /></div>
         </div>
       </div>
       <footer className="flex min-h-8 flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-surface-elevated px-3 py-1 text-xs text-muted-foreground sm:px-4">
         <span className="inline-flex items-center gap-1.5">
+          <Database className="size-3" />
+          {activeDatabase?.name ?? "No active database"}
+        </span>
+        <span className="inline-flex items-center gap-1.5" title="SQLite runs locally in a Web Worker">
           <span className={cn("size-1.5 rounded-full", status === "ready" ? "bg-success" : "bg-warning")} />
-          {activeDatabase?.name ?? (status === "ready" ? "No active database" : "Initializing database")}
+          {status === "ready" ? "SQLite ready" : "SQLite initializing"}
         </span>
-        <span className="inline-flex items-center gap-1.5">
+        <span className="ml-auto inline-flex items-center gap-1.5" title="Database files and workspace metadata are stored in browser IndexedDB">
           <HardDrive className="size-3" />
-          IndexedDB persisted
-        </span>
-        <span className="ml-auto inline-flex items-center gap-1.5">
-          <Clock3 className="size-3" />
-          SQLite WebAssembly · worker
+          Saved locally
         </span>
       </footer>
       {teachingMode ? <TeachingMode onExit={() => setTeachingMode(false)} /> : null}

@@ -127,6 +127,12 @@ class FailingDeletePersistence extends IndexedDbDatabaseStore {
   }
 }
 
+class FailingReplacePersistence extends IndexedDbDatabaseStore {
+  override async replaceDatabaseData() {
+    throw new Error("Simulated replacement storage failure");
+  }
+}
+
 function createHarness(testName: string, ids: string[] = []) {
   const worker = new FakeDatabaseWorker();
   const persistence = new IndexedDbDatabaseStore(`queryquest-test-${testName}-${Date.now()}`);
@@ -274,6 +280,97 @@ describe("DatabaseManager", () => {
     expect(await persistence.getDatabase("csv-database")).toEqual(expect.objectContaining({ bytes: expect.any(Uint8Array) }));
   });
 
+  it("suggests persistent unique display names for duplicate imports", async () => {
+    const databaseName = `queryquest-test-duplicate-names-${Date.now()}`;
+    const persistence = new IndexedDbDatabaseStore(databaseName);
+    const ids = ["first-import", "second-import"];
+    const manager = new DatabaseManager(new FakeDatabaseWorker(), persistence, {
+      createId: () => ids.shift() ?? "fallback-import",
+    });
+    await manager.initialize();
+
+    await manager.loadDatabase({ name: "QueryQuest_College_Sample", bytes: new Uint8Array([1, 2]) });
+    const snapshot = await manager.loadDatabase({ name: "QueryQuest_College_Sample", bytes: new Uint8Array([3, 4]) });
+
+    expect(snapshot.databases.map((database) => database.name)).toEqual([
+      "College",
+      "QueryQuest_College_Sample",
+      "QueryQuest_College_Sample (2)",
+    ]);
+
+    const restored = new DatabaseManager(
+      new FakeDatabaseWorker(),
+      new IndexedDbDatabaseStore(databaseName),
+    );
+    const restoredNames = (await restored.initialize()).databases.map(
+      (database) => database.name,
+    );
+    expect(restoredNames).toHaveLength(3);
+    expect(restoredNames).toEqual(expect.arrayContaining([
+      "College",
+      "QueryQuest_College_Sample",
+      "QueryQuest_College_Sample (2)",
+    ]));
+  });
+
+  it("atomically replaces database contents while preserving its stable ID", async () => {
+    const databaseName = `queryquest-test-replace-${Date.now()}`;
+    const persistence = new IndexedDbDatabaseStore(databaseName);
+    const manager = new DatabaseManager(new FakeDatabaseWorker(), persistence, {
+      createId: () => "replacement-staging",
+    });
+    await manager.initialize();
+    await manager.executeUserQuery("INSERT INTO Students VALUES (1)");
+    await manager.executeUserQuery("SELECT 1");
+    await manager.saveDiagramPositions({ Students: { x: 80, y: 120 } });
+
+    const replaced = await manager.loadDatabase({
+      name: "College Restored",
+      bytes: new Uint8Array([9, 8, 7]),
+      replaceDatabaseId: COLLEGE_DATABASE_ID,
+    });
+
+    expect(replaced.activeDatabaseId).toBe(COLLEGE_DATABASE_ID);
+    expect(replaced.databases).toEqual([
+      expect.objectContaining({
+        id: COLLEGE_DATABASE_ID,
+        name: "College Restored",
+        source: "import",
+      }),
+    ]);
+    expect((await persistence.getDatabase(COLLEGE_DATABASE_ID))?.bytes).toEqual(
+      new Uint8Array([9, 8, 7]),
+    );
+    expect(await persistence.getActiveDatabaseId()).toBe(COLLEGE_DATABASE_ID);
+    expect(await persistence.getQueryHistory()).toEqual([]);
+    expect(await persistence.getDiagramPositions(COLLEGE_DATABASE_ID)).toEqual({});
+    expect(await manager.getCheckpointStatus()).toEqual({ canUndo: false, canRedo: false });
+  });
+
+  it("restores worker contents when an atomic replacement cannot be persisted", async () => {
+    const worker = new FakeDatabaseWorker();
+    const persistence = new FailingReplacePersistence(
+      `queryquest-test-replace-failure-${Date.now()}`,
+    );
+    const manager = new DatabaseManager(worker, persistence, {
+      createId: () => "replacement-staging",
+    });
+    await manager.initialize();
+    const before = (await worker.exportDatabase(COLLEGE_DATABASE_ID)).slice();
+
+    await expect(manager.loadDatabase({
+      name: "College replacement",
+      bytes: new Uint8Array([5, 5, 5]),
+      replaceDatabaseId: COLLEGE_DATABASE_ID,
+    })).rejects.toThrow("Simulated replacement storage failure");
+
+    expect(await worker.exportDatabase(COLLEGE_DATABASE_ID)).toEqual(before);
+    expect(worker.databases.has("replacement-staging")).toBe(false);
+    expect(manager.getSnapshot().databases[0]).toEqual(
+      expect.objectContaining({ id: COLLEGE_DATABASE_ID, name: "College" }),
+    );
+  });
+
   it("persists checkpoints across refresh and restores real database bytes", async () => {
     const databaseName = `queryquest-test-checkpoints-${Date.now()}`;
     const persistence = new IndexedDbDatabaseStore(databaseName);
@@ -409,7 +506,12 @@ describe("DatabaseManager", () => {
     await manager.createDatabase("Lesson Data");
     await manager.executeUserQuery("CREATE TABLE Demo (id INTEGER)");
     await manager.saveQuery("Demo rows", "SELECT * FROM Demo;");
-    await manager.saveWorkspaceSettings({ editorSql: "SELECT * FROM Demo;", activePanel: "history", explorerCollapsed: true });
+    await manager.saveWorkspaceSettings({
+      editorSql: "SELECT * FROM Demo;",
+      activePanel: "history",
+      explorerCollapsed: true,
+      explorerWidth: 318,
+    });
     const before = await manager.exportDatabaseFile("course-db");
     const portable = await manager.exportWorkspace();
 
@@ -422,7 +524,12 @@ describe("DatabaseManager", () => {
     expect(manager.getSnapshot().activeWorkspaceId).toBe("workspace-default");
     const restored = await manager.importWorkspace(portable);
     expect(restored.activeWorkspaceId).toBe(portable.workspace.id);
-    expect(restored.workspaceSettings).toEqual({ editorSql: "SELECT * FROM Demo;", activePanel: "history", explorerCollapsed: true });
+    expect(restored.workspaceSettings).toEqual({
+      editorSql: "SELECT * FROM Demo;",
+      activePanel: "history",
+      explorerCollapsed: true,
+      explorerWidth: 318,
+    });
     expect((await manager.exportDatabaseFile("course-db")).bytes).toEqual(before.bytes);
     expect(await manager.listSavedQueries()).toEqual([expect.objectContaining({ name: "Demo rows", sql: "SELECT * FROM Demo;" })]);
     expect(await manager.listQueryHistory()).toEqual([expect.objectContaining({ sql: "CREATE TABLE Demo (id INTEGER)" })]);

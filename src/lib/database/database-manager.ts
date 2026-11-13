@@ -24,6 +24,7 @@ import type {
   TableSchemaMigrationInput,
   QueryHistoryEntry,
   PortableWorkspaceFile,
+  PersistedDatabase,
   SavedQuery,
   UserQueryExecution,
   WorkspaceMetadata,
@@ -40,6 +41,10 @@ import { classifyUserSql } from "@/lib/database/sql-safety";
 import { assertReadOnlyQuery } from "@/lib/database/read-only-sql";
 import { quoteIdentifier, validateIdentifier } from "@/lib/database/visual-sql";
 import { canImportMySqlDump, type ConvertedMySqlDump } from "@/lib/import/mysql-dump";
+import {
+  findDatabaseNameConflict,
+  suggestUniqueDatabaseName,
+} from "@/lib/database/database-names";
 
 const MAX_SNAPSHOTS = 20;
 const MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024;
@@ -96,7 +101,9 @@ export class DatabaseManager {
       ? savedWorkspaceId!
       : this.workspaces[0].id;
     this.workspaceSettings = await this.persistence.getWorkspaceSettings(this.activeWorkspaceId);
-    const persistedDatabases = await this.persistence.getAllDatabases(this.activeWorkspaceId);
+    const persistedDatabases = await this.normalizeDuplicateDatabaseNames(
+      await this.persistence.getAllDatabases(this.activeWorkspaceId),
+    );
     const previouslyInitialized = await this.persistence.getInitialized();
     await this.worker.initialize(
       persistedDatabases.map((database) => ({
@@ -159,7 +166,9 @@ export class DatabaseManager {
   async switchWorkspace(workspaceId: string) {
     await this.initialize();
     if (!this.workspaces.some((workspace) => workspace.id === workspaceId)) throw new Error("The selected workspace is not available.");
-    const persisted = await this.persistence.getAllDatabases(workspaceId);
+    const persisted = await this.normalizeDuplicateDatabaseNames(
+      await this.persistence.getAllDatabases(workspaceId),
+    );
     await this.worker.initialize(persisted.map((database) => ({ id: database.metadata.id, bytes: database.bytes })));
     this.activeWorkspaceId = workspaceId;
     this.databases = persisted.map((database) => database.metadata);
@@ -337,6 +346,9 @@ export class DatabaseManager {
     const current = this.databases.find((database) => database.id === databaseId);
     if (!current) throw new Error("The database to rename is no longer available.");
     if (current.name === cleanName) return this.getSnapshot();
+    if (findDatabaseNameConflict(this.databases, cleanName, databaseId)) {
+      throw new Error(`A database named “${cleanName}” already exists. Choose a unique display name.`);
+    }
     const bytes = await this.worker.exportDatabase(databaseId);
     const metadata = { ...current, name: cleanName, updatedAt: this.now().toISOString() };
     await this.persistence.renameDatabaseData({ metadata, bytes });
@@ -365,7 +377,7 @@ export class DatabaseManager {
     return this.getSnapshot();
   }
 
-  async loadDatabase(input: { name: string; bytes: Uint8Array }) {
+  async loadDatabase(input: { name: string; bytes: Uint8Array; replaceDatabaseId?: string }) {
     await this.initialize();
     const databaseId = this.createId();
     const name = input.name.trim() || "Imported database";
@@ -373,6 +385,13 @@ export class DatabaseManager {
     try {
       await this.worker.loadDatabase(databaseId, input.bytes);
       await this.worker.listTables(databaseId);
+      if (input.replaceDatabaseId) {
+        return await this.replaceDatabaseFromStaging(
+          databaseId,
+          input.replaceDatabaseId,
+          name,
+        );
+      }
       return await this.persistNewDatabase(databaseId, name, "import");
     } catch (error) {
       await this.worker.dropDatabase(databaseId).catch(() => undefined);
@@ -384,7 +403,7 @@ export class DatabaseManager {
     }
   }
 
-  async importMySqlDump(name: string, dump: ConvertedMySqlDump) {
+  async importMySqlDump(name: string, dump: ConvertedMySqlDump, replaceDatabaseId?: string) {
     await this.initialize();
     const databaseName = name.trim();
     if (!databaseName) throw new Error("Enter a database name.");
@@ -413,6 +432,13 @@ export class DatabaseManager {
       }
       await this.worker.executeSql(databaseId, "COMMIT", { readOnly: false });
       await this.worker.executeSql(databaseId, "PRAGMA foreign_keys = ON", { readOnly: false });
+      if (replaceDatabaseId) {
+        return await this.replaceDatabaseFromStaging(
+          databaseId,
+          replaceDatabaseId,
+          databaseName,
+        );
+      }
       return await this.persistNewDatabase(databaseId, databaseName, "import");
     } catch (error) {
       await this.worker.executeSql(databaseId, "ROLLBACK", { readOnly: false }).catch(() => undefined);
@@ -447,6 +473,7 @@ export class DatabaseManager {
     tableName: string;
     columns: DatasetColumn[];
     rows: SqlValue[][];
+    replaceDatabaseId?: string;
   }) {
     await this.initialize();
     const databaseName = input.databaseName.trim();
@@ -458,6 +485,13 @@ export class DatabaseManager {
     await this.worker.createDatabase(databaseId);
     try {
       await this.worker.importTable(databaseId, tableName, input.columns, input.rows);
+      if (input.replaceDatabaseId) {
+        return await this.replaceDatabaseFromStaging(
+          databaseId,
+          input.replaceDatabaseId,
+          databaseName,
+        );
+      }
       return await this.persistNewDatabase(databaseId, databaseName, "import");
     } catch (error) {
       await this.worker.dropDatabase(databaseId).catch(() => undefined);
@@ -683,10 +717,14 @@ export class DatabaseManager {
   ) {
     const bytes = await this.worker.exportDatabase(databaseId);
     const timestamp = this.now().toISOString();
+    const displayName = suggestUniqueDatabaseName(
+      name,
+      this.databases.map((database) => database.name),
+    );
     const metadata: DatabaseMetadata = {
       id: databaseId,
       workspaceId: this.activeWorkspaceId,
-      name,
+      name: displayName,
       source,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -696,6 +734,87 @@ export class DatabaseManager {
     this.databases = [...this.databases, metadata];
     this.activeDatabaseId = databaseId;
     await this.persistence.setActiveDatabaseId(databaseId, this.activeWorkspaceId);
+    return this.getSnapshot();
+  }
+
+  private async normalizeDuplicateDatabaseNames(databases: PersistedDatabase[]) {
+    const usedNames: string[] = [];
+    const normalized: PersistedDatabase[] = [];
+
+    for (const database of databases) {
+      const uniqueName = suggestUniqueDatabaseName(database.metadata.name, usedNames);
+      usedNames.push(uniqueName);
+      if (uniqueName === database.metadata.name) {
+        normalized.push(database);
+        continue;
+      }
+      const updated = {
+        ...database,
+        metadata: {
+          ...database.metadata,
+          name: uniqueName,
+          updatedAt: this.now().toISOString(),
+        },
+      };
+      await this.persistence.renameDatabaseData(updated);
+      normalized.push(updated);
+    }
+
+    return normalized;
+  }
+
+  private async replaceDatabaseFromStaging(
+    stagingDatabaseId: string,
+    databaseId: string,
+    name: string,
+  ) {
+    const current = this.databases.find((database) => database.id === databaseId);
+    if (!current) {
+      await this.worker.dropDatabase(stagingDatabaseId).catch(() => undefined);
+      throw new Error("The database selected for replacement is no longer available.");
+    }
+    const replacementName = name.trim() || current.name;
+    if (findDatabaseNameConflict(this.databases, replacementName, databaseId)) {
+      await this.worker.dropDatabase(stagingDatabaseId).catch(() => undefined);
+      throw new Error(`A database named “${replacementName}” already exists. Choose a unique display name.`);
+    }
+
+    const [replacementBytes, backupBytes] = await Promise.all([
+      this.worker.exportDatabase(stagingDatabaseId),
+      this.worker.exportDatabase(databaseId),
+    ]);
+    const timestamp = this.now().toISOString();
+    const metadata: DatabaseMetadata = {
+      ...current,
+      name: replacementName,
+      source: "import",
+      updatedAt: timestamp,
+      sizeBytes: replacementBytes.byteLength,
+    };
+    const checkpoint = this.newCheckpointState(
+      databaseId,
+      replacementBytes,
+      "Initial imported replacement",
+    );
+
+    await this.worker.loadDatabase(databaseId, replacementBytes);
+    try {
+      await this.persistence.replaceDatabaseData(
+        { metadata, bytes: replacementBytes },
+        checkpoint,
+        this.activeWorkspaceId,
+      );
+    } catch (error) {
+      await this.worker.loadDatabase(databaseId, backupBytes).catch(() => undefined);
+      throw error;
+    } finally {
+      await this.worker.dropDatabase(stagingDatabaseId).catch(() => undefined);
+    }
+
+    this.databases = this.databases.map((database) =>
+      database.id === databaseId ? metadata : database,
+    );
+    this.activeDatabaseId = databaseId;
     return this.getSnapshot();
   }
 

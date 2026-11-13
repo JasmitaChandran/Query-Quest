@@ -11,6 +11,10 @@ import { parseCsvDataset, parseJsonDataset } from "@/lib/import/dataset-parser";
 import { canImportMySqlDump, parseMySqlDump, type ConvertedMySqlDump } from "@/lib/import/mysql-dump";
 import { cn } from "@/lib/utils";
 import { useDatabaseStore } from "@/store/database-store";
+import {
+  findDatabaseNameConflict,
+  suggestUniqueDatabaseName,
+} from "@/lib/database/database-names";
 
 const SQLITE_EXTENSIONS = ["db", "sqlite", "sqlite3"];
 const MAX_SQLITE = 50 * 1024 * 1024;
@@ -18,6 +22,7 @@ const MAX_DATASET = 10 * 1024 * 1024;
 const MAX_MYSQL = 25 * 1024 * 1024;
 type Prepared = { kind: "sqlite"; bytes: Uint8Array; preview: DatabaseImportPreview } | { kind: "dataset"; columns: DatasetColumn[]; rows: SqlValue[][] } | { kind: "mysql"; dump: ConvertedMySqlDump };
 type PreviewTable = { name: string; count: number; columns: Array<{ name: string; type: string }>; headers: string[]; rows: SqlValue[][]; createSql?: string; indexes?: string[] };
+type ImportMode = "copy" | "replace";
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -44,6 +49,10 @@ export function DropZone({ onImported, onCancel }: { onImported: () => void; onC
   const [file, setFile] = React.useState<File | null>(null);
   const [prepared, setPrepared] = React.useState<Prepared | null>(null);
   const [databaseName, setDatabaseName] = React.useState("");
+  const [sourceDatabaseName, setSourceDatabaseName] = React.useState("");
+  const [importMode, setImportMode] = React.useState<ImportMode>("copy");
+  const [replaceDatabaseId, setReplaceDatabaseId] = React.useState("");
+  const [replaceConfirmed, setReplaceConfirmed] = React.useState(false);
   const [datasetTableName, setDatasetTableName] = React.useState("");
   const [progress, setProgress] = React.useState(0);
   const [parsing, setParsing] = React.useState(false);
@@ -57,6 +66,7 @@ export function DropZone({ onImported, onCancel }: { onImported: () => void; onC
 
   const reset = React.useCallback(() => {
     setFile(null); setPrepared(null); setProgress(0); setError(null);
+    setSourceDatabaseName(""); setImportMode("copy"); setReplaceDatabaseId(""); setReplaceConfirmed(false);
     if (inputRef.current) inputRef.current.value = "";
   }, []);
 
@@ -68,7 +78,14 @@ export function DropZone({ onImported, onCancel }: { onImported: () => void; onC
     const max = SQLITE_EXTENSIONS.includes(extension) ? MAX_SQLITE : extension === "sql" ? MAX_MYSQL : MAX_DATASET;
     if (!next.size) { setError("The selected file is empty."); return; }
     if (next.size > max) { setError(`This file exceeds the ${formatBytes(max)} limit for its format.`); return; }
-    setDatabaseName(baseName(next.name)); setDatasetTableName(safeTableName(next.name)); setParsing(true);
+    const requestedName = baseName(next.name);
+    const duplicate = databases.find((database) => database.name.toLocaleLowerCase() === requestedName.toLocaleLowerCase());
+    setSourceDatabaseName(requestedName);
+    setDatabaseName(suggestUniqueDatabaseName(requestedName, databases.map((database) => database.name)));
+    setImportMode("copy");
+    setReplaceDatabaseId(duplicate?.id ?? "");
+    setReplaceConfirmed(false);
+    setDatasetTableName(safeTableName(next.name)); setParsing(true);
     try {
       const raw = await readFile(next, !SQLITE_EXTENSIONS.includes(extension), setProgress);
       setProgress(85);
@@ -84,22 +101,33 @@ export function DropZone({ onImported, onCancel }: { onImported: () => void; onC
       setProgress(100);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The file could not be parsed."); }
     finally { setParsing(false); }
-  }, [previewSqlite]);
+  }, [databases, previewSqlite]);
 
   const confirmImport = async () => {
     if (!prepared) return;
     if (!databaseName.trim()) { setError("Enter a database name."); return; }
+    const replacing = importMode === "replace";
+    if (replacing && (!replaceDatabaseId || !replaceConfirmed)) {
+      setError("Explicitly confirm the replacement before importing."); return;
+    }
+    if (!replacing && findDatabaseNameConflict(databases, databaseName)) {
+      const suggestion = suggestUniqueDatabaseName(databaseName, databases.map((database) => database.name));
+      setDatabaseName(suggestion);
+      setError(`That display name is already in use. QueryQuest suggested “${suggestion}”; review it and confirm again.`);
+      return;
+    }
     if (prepared.kind === "dataset" && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(datasetTableName)) {
       setError("Table names must start with a letter or underscore and contain only letters, numbers, and underscores."); return;
     }
     setError(null);
     try {
-      if (prepared.kind === "sqlite") await importSqlite(databaseName, prepared.bytes);
+      const replacementId = replacing ? replaceDatabaseId : undefined;
+      if (prepared.kind === "sqlite") await importSqlite(databaseName, prepared.bytes, replacementId);
       else if (prepared.kind === "mysql") {
         if (!canImportMySqlDump(prepared.dump)) { setError("Resolve the reported MySQL conversion errors before importing."); return; }
-        await importMySql(databaseName, prepared.dump);
-      } else await importDataset({ databaseName, tableName: datasetTableName, columns: prepared.columns, rows: prepared.rows });
-      toast.success("Database imported", { description: "It is saved locally, selected, and ready for SQL." });
+        await importMySql(databaseName, prepared.dump, replacementId);
+      } else await importDataset({ databaseName, tableName: datasetTableName, columns: prepared.columns, rows: prepared.rows, replaceDatabaseId: replacementId });
+      toast.success(replacing ? "Database replaced" : "Database imported", { description: replacing ? "The replacement was validated and committed atomically." : "It is saved locally, selected, and ready for SQL." });
       onImported();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Import failed."); }
   };
@@ -111,7 +139,8 @@ export function DropZone({ onImported, onCancel }: { onImported: () => void; onC
     : prepared?.kind === "dataset"
       ? [{ name: datasetTableName, count: prepared.rows.length, columns: prepared.columns, headers: prepared.columns.map((column) => column.name), rows: prepared.rows.slice(0, 5) }]
       : [];
-  const duplicateName = databases.some((item) => item.name.toLowerCase() === databaseName.trim().toLowerCase());
+  const duplicateDatabases = databases.filter((item) => item.name.toLocaleLowerCase() === sourceDatabaseName.toLocaleLowerCase());
+  const selectedReplacement = databases.find((database) => database.id === replaceDatabaseId);
 
   return <div className="space-y-5">
     <input ref={inputRef} className="sr-only" type="file" accept=".db,.sqlite,.sqlite3,.csv,.json,.sql" onChange={(event) => void stageFile(event.target.files?.[0])} aria-label="Choose a database, MySQL dump, or dataset file" />
@@ -122,10 +151,10 @@ export function DropZone({ onImported, onCancel }: { onImported: () => void; onC
     {error ? <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive-tint p-4 text-sm text-destructive">{error}</div> : null}
     {prepared ? <div className="space-y-5 rounded-2xl border bg-card p-5 sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-widest text-primary">{prepared.kind === "mysql" ? "MySQL dump detected" : "Preview ready"}</p><h2 className="mt-1 font-display text-xl font-semibold">Review before importing</h2><p className="mt-1 text-sm text-muted-foreground">{file?.name} · {file ? formatBytes(file.size) : ""}{prepared.kind === "mysql" ? ` · ${prepared.dump.statementCount} statements` : ""}</p></div><Button variant="ghost" size="icon-sm" onClick={reset} aria-label="Cancel import"><X /></Button></div>
       <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-sm font-medium">Database name<input className="ui-input flex w-full" value={databaseName} onChange={(event) => setDatabaseName(event.target.value)} /></label>{prepared.kind === "dataset" ? <label className="space-y-2 text-sm font-medium">Table name<input className="ui-input flex w-full" value={datasetTableName} onChange={(event) => setDatasetTableName(event.target.value)} /></label> : null}</div>
-      {duplicateName ? <p className="rounded-lg border border-warning/30 bg-warning-tint p-3 text-xs text-warning">A database with this display name exists. QueryQuest will create a separate database and will not overwrite it.</p> : null}
+      {duplicateDatabases.length ? <div className="space-y-3 rounded-xl border border-warning/30 bg-warning-tint p-4"><div className="flex gap-2"><AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" /><div><p className="text-sm font-semibold text-foreground">“{sourceDatabaseName}” already exists</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Import a uniquely named copy, or explicitly replace one existing database after validation. Stable database IDs never change for rename-only operations.</p></div></div><div className="grid gap-2 sm:grid-cols-2"><label className={cn("rounded-lg border bg-surface p-3 text-xs", importMode === "copy" && "border-primary/40 ring-1 ring-primary/20")}><span className="flex items-center gap-2 font-semibold"><input type="radio" name="import-mode" checked={importMode === "copy"} onChange={() => { setImportMode("copy"); setReplaceConfirmed(false); setDatabaseName(suggestUniqueDatabaseName(sourceDatabaseName, databases.map((database) => database.name))); }} />Import as a new database</span><span className="mt-1 block pl-5 text-muted-foreground">Recommended · suggested as “{suggestUniqueDatabaseName(sourceDatabaseName, databases.map((database) => database.name))}”</span></label><label className={cn("rounded-lg border bg-surface p-3 text-xs", importMode === "replace" && "border-destructive/45 ring-1 ring-destructive/20")}><span className="flex items-center gap-2 font-semibold text-destructive"><input type="radio" name="import-mode" checked={importMode === "replace"} onChange={() => { const target = duplicateDatabases[0]; setImportMode("replace"); setReplaceDatabaseId(target?.id ?? ""); setDatabaseName(target?.name ?? sourceDatabaseName); setReplaceConfirmed(false); }} />Replace existing database</span><span className="mt-1 block pl-5 text-muted-foreground">Removes its current tables, records, history, checkpoints, and diagram layout only after the replacement validates.</span></label></div>{importMode === "replace" ? <div className="space-y-3 rounded-lg border border-destructive/25 bg-destructive-tint p-3">{duplicateDatabases.length > 1 ? <label className="block text-xs font-semibold">Database to replace<select value={replaceDatabaseId} onChange={(event) => { const target = databases.find((database) => database.id === event.target.value); setReplaceDatabaseId(event.target.value); setDatabaseName(target?.name ?? sourceDatabaseName); setReplaceConfirmed(false); }} className="ui-input mt-2 w-full">{duplicateDatabases.map((database) => <option key={database.id} value={database.id}>{database.name}</option>)}</select></label> : <p className="text-xs text-muted-foreground">Target: <strong className="text-foreground">{selectedReplacement?.name}</strong></p>}<label className="flex items-start gap-2 text-xs font-semibold text-destructive"><input type="checkbox" className="mt-0.5 size-4" checked={replaceConfirmed} onChange={(event) => setReplaceConfirmed(event.target.checked)} />I understand that replacing this database removes its current tables and records after the new import is validated.</label></div> : null}</div> : null}
       {prepared.kind === "mysql" ? <div className="space-y-2"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold">Conversion report</p><span className="text-xs text-muted-foreground">{prepared.dump.issues.filter((issue) => issue.severity === "error").length} errors · {prepared.dump.issues.filter((issue) => issue.severity === "warning").length} warnings</span></div>{prepared.dump.issues.length ? <div className="max-h-64 space-y-2 overflow-auto rounded-xl border p-3">{prepared.dump.issues.map((issue, index) => <div key={`${issue.code}-${issue.statement ?? "all"}-${index}`} className={cn("flex gap-2 rounded-lg px-3 py-2 text-xs leading-5", issue.severity === "error" ? "bg-destructive-tint text-destructive" : issue.severity === "warning" ? "bg-warning-tint text-warning" : "bg-info-tint text-info")}>{issue.severity === "error" ? <CircleAlert className="mt-0.5 size-3.5 shrink-0" /> : issue.severity === "warning" ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> : <Info className="mt-0.5 size-3.5 shrink-0" />}<span>{issue.message}</span></div>)}</div> : <p className="rounded-xl border border-success/30 bg-success-tint p-3 text-xs text-success">All detected statements are supported by the documented conversion subset.</p>}</div> : null}
       <div className="space-y-4">{previewTables.length ? previewTables.map((table) => <div key={table.name} className="overflow-hidden rounded-xl border"><div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-4 py-3"><p className="font-mono text-sm font-semibold">{table.name}</p><p className="text-xs text-muted-foreground">{table.columns.length} columns · {table.count} rows{table.indexes?.length ? ` · ${table.indexes.length} indexes` : ""}</p></div><div className="flex flex-wrap gap-2 border-b p-3">{table.columns.map((column) => <span key={column.name} className="rounded-md border bg-background px-2 py-1 font-mono text-[13px]">{column.name} <span className="text-primary">{column.type}</span></span>)}</div><div className="max-h-52 overflow-auto"><Table><TableHeader><TableRow>{table.headers.map((header) => <TableHead key={header} className="whitespace-nowrap font-mono text-[13px]">{header}</TableHead>)}</TableRow></TableHeader><TableBody>{table.rows.map((row, index) => <TableRow key={index}>{row.map((value, cell) => <TableCell key={cell} className="max-w-56 truncate font-mono text-[13px]">{value === null ? <span className="text-muted-foreground">NULL</span> : value instanceof Uint8Array ? `BLOB (${value.byteLength} bytes)` : String(value)}</TableCell>)}</TableRow>)}</TableBody></Table></div>{table.createSql ? <details className="border-t bg-muted/15"><summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-muted-foreground">Generated SQLite schema</summary><pre className="workspace-scrollbar max-h-52 overflow-auto border-t p-4 font-mono text-[13px] leading-5"><code>{table.createSql}</code></pre></details> : null}</div>) : <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">{prepared.kind === "mysql" ? "No convertible tables were found. Review the conversion errors above." : "This is a valid empty SQLite database with no user tables."}</p>}</div>
-      <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end"><Button variant="outline" onClick={onCancel} disabled={isImporting}>Cancel</Button><Button onClick={() => void confirmImport()} disabled={isImporting || (prepared.kind === "mysql" && !canImportMySqlDump(prepared.dump))}>{isImporting ? <LoaderCircle className="animate-spin" /> : <FileUp />}{isImporting ? "Importing atomically…" : prepared.kind === "mysql" ? "Convert & import" : "Confirm import"}</Button></div>
+      <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end"><Button variant="outline" onClick={onCancel} disabled={isImporting}>Cancel</Button><Button variant={importMode === "replace" ? "destructive" : "default"} onClick={() => void confirmImport()} disabled={isImporting || (importMode === "replace" && !replaceConfirmed) || (prepared.kind === "mysql" && !canImportMySqlDump(prepared.dump))}>{isImporting ? <LoaderCircle className="animate-spin" /> : <FileUp />}{isImporting ? "Importing atomically…" : importMode === "replace" ? "Replace database" : prepared.kind === "mysql" ? "Convert & import" : "Confirm import"}</Button></div>
     </div> : null}
     {!prepared ? <div className="flex justify-end border-t pt-4"><Button variant="outline" onClick={onCancel} disabled={parsing || isImporting}>Cancel</Button></div> : null}
   </div>;

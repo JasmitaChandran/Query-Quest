@@ -61,9 +61,18 @@ const previewMutation: PreviewMutation = async (input): Promise<MutationPreviewR
 
 describe("step-by-step SELECT visualization", () => {
   it("preserves the Part 1 WHERE, SELECT, ORDER BY, and LIMIT journey", async () => {
-    const plan = await createVisualizationPlan("SELECT name, age FROM Students WHERE age > 20 ORDER BY age DESC LIMIT 2;", execute);
-    expect(plan.steps.map((step) => step.kind)).toEqual(["source", "filter", "project", "order", "limit", "result"]);
-    expect(plan.steps.find((step) => step.kind === "filter")?.matchingRowIds).toEqual([2, 3, 5, 6]);
+    const plan = await createVisualizationPlan("SELECT name AS student, age FROM Students WHERE age > 20 ORDER BY age DESC LIMIT 2;", execute);
+    expect(plan.steps.map((step) => step.kind)).toEqual(["source", "filter", "project", "project", "order", "limit", "result"]);
+    const filter = plan.steps.find((step) => step.kind === "filter");
+    const projection = plan.steps.filter((step) => step.kind === "project");
+    expect(filter?.matchingRowIds).toEqual([2, 3, 5, 6]);
+    expect(filter?.explanation).toContain("4 of 6");
+    expect(filter?.explanation).toContain("NULL");
+    expect(projection.map((step) => step.projectionPhase)).toEqual(["highlight", "apply"]);
+    expect(projection[0].highlightedColumns).toEqual(["name", "age"]);
+    expect(projection[1].table.columns).toEqual(["student", "age"]);
+    expect(projection[1].table.rowIds).toEqual([2, 3, 5, 6]);
+    expect(plan.steps.find((step) => step.kind === "order")?.explanation).toContain("equal sort keys");
     expect(plan.finalResult.values).toEqual([["Lina", 30], ["Mateo", 25]]);
     expect(plan.validated).toBe(true);
   });
@@ -76,6 +85,7 @@ describe("step-by-step SELECT visualization", () => {
     expect(plan.sources.map((source) => source.tableName)).toEqual(["Students", "Departments"]);
     expect(join?.panels?.every((panel) => panel.highlightedColumns?.length === 1)).toBe(true);
     expect(join?.table.values).toHaveLength(6);
+    expect(join?.explanation).toContain("one source row may contribute to several combinations");
     expect(plan.finalResult.values[0]).toEqual(["Anika", "Engineering"]);
     expect(plan.validated).toBe(true);
   });
@@ -122,6 +132,20 @@ describe("checkpoint-ready DML visualization", () => {
     expect(plan.finalResult.values.at(-1)).toEqual([7, "Zoya", 22, 88, 3]);
     expect(run(database, "SELECT COUNT(*) FROM Students").values).toEqual([[7]]);
     expect(plan.validated).toBe(true);
+  });
+
+  it("replays captured mutation steps without executing the INSERT again", async () => {
+    let executions = 0;
+    const sql = "INSERT INTO Students (id, name, age, score, department_id) VALUES (7, 'Zoya', 22, 88, 3)";
+    const plan = await createMutationVisualizationPlan(sql, previewMutation, async () => {
+      executions += 1;
+      return execute(sql);
+    }, execute);
+
+    const replayedFrames = [...plan.steps, ...plan.steps, ...plan.steps];
+    expect(replayedFrames).toHaveLength(plan.steps.length * 3);
+    expect(executions).toBe(1);
+    expect(run(database, "SELECT COUNT(*) FROM Students WHERE id = 7").values).toEqual([[1]]);
   });
 
   it("captures UPDATE before-and-after values and validates the real state", async () => {

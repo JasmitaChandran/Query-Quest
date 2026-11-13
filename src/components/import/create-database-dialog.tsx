@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { useDatabaseStore } from "@/store/database-store";
 
-export function CreateDatabaseDialog({ compact = false }: { compact?: boolean }) {
+export function CreateDatabaseDialog({ compact = false, triggerLabel = "Create Database" }: { compact?: boolean; triggerLabel?: string }) {
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const createDatabase = useDatabaseStore((state) => state.createDatabase);
@@ -43,7 +43,7 @@ export function CreateDatabaseDialog({ compact = false }: { compact?: boolean })
       <DialogTrigger asChild>
         <Button variant="outline" size={compact ? "icon-sm" : "sm"} title="Create database" aria-label={compact ? "Create database" : undefined}>
           <Plus />
-          {compact ? null : "Create Database"}
+          {compact ? null : triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent>

@@ -33,6 +33,9 @@ export function parsePortableWorkspace(text: string): PortableWorkspaceFile {
   if (!value.workspace?.id || !value.workspace.name) throw new Error("Workspace metadata is incomplete.");
   if (!Array.isArray(value.databases) || !Array.isArray(value.savedQueries) || !Array.isArray(value.queryHistory)) throw new Error("Workspace contents are incomplete.");
   if (!value.settings || typeof value.settings.editorSql !== "string" || typeof value.settings.explorerCollapsed !== "boolean" || !["editor", "visualizer", "data", "schema", "history"].includes(value.settings.activePanel ?? "")) throw new Error("Workspace settings are incomplete or invalid.");
+  value.settings.explorerWidth = typeof value.settings.explorerWidth === "number"
+    ? Math.min(360, Math.max(230, Math.round(value.settings.explorerWidth)))
+    : 270;
   const databaseIds = new Set<string>();
   for (const item of value.databases) {
     if (!item?.metadata?.id || !item.metadata.name || typeof item.sqliteBase64 !== "string") throw new Error("A database entry is incomplete.");

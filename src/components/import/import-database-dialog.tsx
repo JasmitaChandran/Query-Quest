@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-export function ImportDatabaseDialog() {
+export function ImportDatabaseDialog({ triggerLabel = "Import Database" }: { triggerLabel?: string } = {}) {
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -22,7 +22,7 @@ export function ImportDatabaseDialog() {
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="min-w-0 justify-center">
           <Import />
-          Import Database
+          {triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent className="workspace-scrollbar max-h-[92vh] max-w-5xl gap-0 overflow-y-auto p-0">

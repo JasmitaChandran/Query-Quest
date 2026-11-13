@@ -256,6 +256,7 @@ export interface WorkspaceSettings {
   editorSql: string;
   activePanel: "editor" | "visualizer" | "data" | "schema" | "history";
   explorerCollapsed: boolean;
+  explorerWidth: number;
 }
 
 export interface SavedQuery {

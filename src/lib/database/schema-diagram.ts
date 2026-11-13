@@ -11,6 +11,25 @@ export interface SchemaRelationship {
   onUpdate: string;
 }
 
+export const SCHEMA_NODE_WIDTH = 252;
+export const SCHEMA_NODE_MIN_HEIGHT = 116;
+const SCHEMA_LAYOUT_X_GAP = 128;
+const SCHEMA_LAYOUT_Y_GAP = 56;
+const SCHEMA_LAYOUT_PADDING = 64;
+
+export function estimatedSchemaNodeHeight(schema?: TableSchema) {
+  const visibleColumns = Math.min(schema?.columns.length ?? 5, 7);
+  return SCHEMA_NODE_MIN_HEIGHT + visibleColumns * 32;
+}
+
+export function relatedSchemaTables(relationships: SchemaRelationship[], tableName: string) {
+  return new Set(relationships.flatMap((relationship) => {
+    if (relationship.parentTable === tableName) return [relationship.childTable];
+    if (relationship.childTable === tableName) return [relationship.parentTable];
+    return [];
+  }));
+}
+
 function sameColumnSet(left: string[], right: string[]) {
   if (left.length !== right.length) return false;
   const normalized = new Set(left.map((column) => column.toLowerCase()));
@@ -64,6 +83,7 @@ export function detectSchemaRelationships(
 export function automaticDiagramPositions(
   tables: TableSummary[],
   relationships: SchemaRelationship[],
+  schemas: Record<string, TableSchema> = {},
 ): DiagramPositions {
   const tableNames = tables.filter((table) => table.type === "table").map((table) => table.name);
   const depth = new Map(tableNames.map((table) => [table, 0]));
@@ -88,8 +108,13 @@ export function automaticDiagramPositions(
   const result: DiagramPositions = {};
   for (const [column, names] of [...columns].sort(([left], [right]) => left - right)) {
     names.sort((left, right) => left.localeCompare(right));
-    names.forEach((tableName, row) => {
-      result[tableName] = { x: 72 + column * 370, y: 72 + row * 310 };
+    let y = SCHEMA_LAYOUT_PADDING;
+    names.forEach((tableName) => {
+      result[tableName] = {
+        x: SCHEMA_LAYOUT_PADDING + column * (SCHEMA_NODE_WIDTH + SCHEMA_LAYOUT_X_GAP),
+        y,
+      };
+      y += estimatedSchemaNodeHeight(schemas[tableName]) + SCHEMA_LAYOUT_Y_GAP;
     });
   }
   return result;
@@ -99,8 +124,9 @@ export function mergeDiagramPositions(
   tables: TableSummary[],
   relationships: SchemaRelationship[],
   saved: DiagramPositions,
+  schemas: Record<string, TableSchema> = {},
 ) {
-  const automatic = automaticDiagramPositions(tables, relationships);
+  const automatic = automaticDiagramPositions(tables, relationships, schemas);
   return Object.fromEntries(
     Object.entries(automatic).map(([tableName, position]) => [tableName, saved[tableName] ?? position]),
   );
