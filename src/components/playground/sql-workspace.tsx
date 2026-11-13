@@ -414,16 +414,17 @@ export function SqlWorkspace() {
   const editorSql = useWorkspaceStore((state) => state.editorSql);
   const explorerCollapsed = useWorkspaceStore((state) => state.explorerCollapsed);
   const explorerWidth = useWorkspaceStore((state) => state.explorerWidth);
+  const selectedTable = useDatabaseStore((state) => state.selectedTable);
   const activeWorkspaceId = useDatabaseStore((state) => state.activeWorkspaceId);
   const saveWorkspaceSettings = useDatabaseStore((state) => state.saveWorkspaceSettings);
 
   React.useEffect(() => {
     if (status !== "ready" || !activeWorkspaceId) return;
     const timeout = window.setTimeout(() => {
-      void saveWorkspaceSettings({ activePanel, editorSql, explorerCollapsed, explorerWidth }).catch(() => undefined);
+      void saveWorkspaceSettings({ activePanel, editorSql, explorerCollapsed, explorerWidth, selectedTable }).catch(() => undefined);
     }, 400);
     return () => window.clearTimeout(timeout);
-  }, [activePanel, activeWorkspaceId, editorSql, explorerCollapsed, explorerWidth, saveWorkspaceSettings, status]);
+  }, [activePanel, activeWorkspaceId, editorSql, explorerCollapsed, explorerWidth, saveWorkspaceSettings, selectedTable, status]);
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-background">

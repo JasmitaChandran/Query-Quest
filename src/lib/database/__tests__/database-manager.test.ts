@@ -505,20 +505,22 @@ describe("DatabaseManager", () => {
     await manager.createWorkspace("Course Demo");
     await manager.createDatabase("Lesson Data");
     await manager.executeUserQuery("CREATE TABLE Demo (id INTEGER)");
-    await manager.saveQuery("Demo rows", "SELECT * FROM Demo;");
+    await manager.saveQuery("Demo rows", "SELECT * FROM Demo;", undefined, "Reusable lesson query");
     await manager.saveWorkspaceSettings({
       editorSql: "SELECT * FROM Demo;",
       activePanel: "history",
       explorerCollapsed: true,
       explorerWidth: 318,
+      selectedTable: "Demo",
     });
     const before = await manager.exportDatabaseFile("course-db");
     const portable = await manager.exportWorkspace();
 
     expect(portable.format).toBe("queryquest-workspace");
     expect(portable.databases).toHaveLength(1);
-    expect(portable.savedQueries[0]).toEqual(expect.objectContaining({ name: "Demo rows" }));
-    expect(portable.queryHistory[0]).toEqual(expect.objectContaining({ sql: "CREATE TABLE Demo (id INTEGER)" }));
+    expect(portable.savedQueries[0]).toEqual(expect.objectContaining({ name: "Demo rows", description: "Reusable lesson query" }));
+    expect(portable.queryHistory[0]).toEqual(expect.objectContaining({ sql: "CREATE TABLE Demo (id INTEGER)", queryType: "DDL" }));
+    expect(await manager.getWorkspaceDatabaseCounts()).toEqual(expect.objectContaining({ [portable.workspace.id]: 1 }));
 
     await manager.deleteWorkspace(portable.workspace.id);
     expect(manager.getSnapshot().activeWorkspaceId).toBe("workspace-default");
@@ -529,6 +531,7 @@ describe("DatabaseManager", () => {
       activePanel: "history",
       explorerCollapsed: true,
       explorerWidth: 318,
+      selectedTable: "Demo",
     });
     expect((await manager.exportDatabaseFile("course-db")).bytes).toEqual(before.bytes);
     expect(await manager.listSavedQueries()).toEqual([expect.objectContaining({ name: "Demo rows", sql: "SELECT * FROM Demo;" })]);

@@ -228,6 +228,9 @@ export interface QueryHistoryEntry {
   status: "success" | "error";
   durationMs: number;
   operation: "read" | "write";
+  queryType?: "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "DDL" | "OTHER";
+  rowCount?: number;
+  rowsAffected?: number;
   error?: string;
 }
 
@@ -257,12 +260,14 @@ export interface WorkspaceSettings {
   activePanel: "editor" | "visualizer" | "data" | "schema" | "history";
   explorerCollapsed: boolean;
   explorerWidth: number;
+  selectedTable: string | null;
 }
 
 export interface SavedQuery {
   id: string;
   workspaceId: string;
   name: string;
+  description?: string;
   sql: string;
   createdAt: string;
   updatedAt: string;

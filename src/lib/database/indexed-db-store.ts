@@ -31,6 +31,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   activePanel: "editor",
   explorerCollapsed: false,
   explorerWidth: 270,
+  selectedTable: null,
 };
 
 type StoredDatabase = { id: string; metadata: DatabaseMetadata; bytes: ArrayBuffer };

@@ -1,5 +1,25 @@
 const stripComments = (sql: string) => sql.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--.*$/gm, " ").trim();
 
+export type SqlQueryType = "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "DDL" | "OTHER";
+
+export function getSqlQueryType(sql: string): SqlQueryType {
+  const statement = splitSqlStatements(sql)[0];
+  if (!statement) return "OTHER";
+  const clean = stripComments(statement);
+  if (/^(SELECT|EXPLAIN)\b/i.test(clean)) return "SELECT";
+  if (/^INSERT\b/i.test(clean)) return "INSERT";
+  if (/^UPDATE\b/i.test(clean)) return "UPDATE";
+  if (/^DELETE\b/i.test(clean)) return "DELETE";
+  if (/^(CREATE|ALTER|DROP|REINDEX|VACUUM|PRAGMA)\b/i.test(clean)) return "DDL";
+  if (/^WITH\b/i.test(clean)) {
+    if (/\bINSERT\b/i.test(clean)) return "INSERT";
+    if (/\bUPDATE\b/i.test(clean)) return "UPDATE";
+    if (/\bDELETE\b/i.test(clean)) return "DELETE";
+    return "SELECT";
+  }
+  return "OTHER";
+}
+
 export function splitSqlStatements(sql: string) {
   const statements: string[] = [];
   let current = "";

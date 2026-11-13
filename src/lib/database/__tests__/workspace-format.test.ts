@@ -14,6 +14,7 @@ function portableFixture(): PortableWorkspaceFile {
       activePanel: "editor",
       explorerCollapsed: false,
       explorerWidth: 270,
+      selectedTable: "Demo",
     },
     activeDatabaseId: "demo-db",
     databases: [{ metadata: { id: "demo-db", workspaceId: "workspace-demo", name: "Demo DB", source: "created", createdAt: "2026-11-04T08:00:00.000Z", updatedAt: "2026-11-04T08:00:00.000Z", sizeBytes: 4 }, sqliteBase64: bytesToBase64(new Uint8Array([1, 2, 3, 4])), diagramPositions: {} }],
@@ -39,6 +40,7 @@ describe("portable workspace format", () => {
     const portable = portableFixture();
     const legacySettings = { ...portable.settings } as Partial<typeof portable.settings>;
     delete legacySettings.explorerWidth;
+    delete legacySettings.selectedTable;
 
     const restored = parsePortableWorkspace(JSON.stringify({
       ...portable,
@@ -46,6 +48,7 @@ describe("portable workspace format", () => {
     }));
 
     expect(restored.settings.explorerWidth).toBe(270);
+    expect(restored.settings.selectedTable).toBeNull();
   });
 
   it("escapes commas, quotes, line breaks, nulls, and blobs in CSV results", () => {

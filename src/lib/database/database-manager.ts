@@ -37,7 +37,7 @@ import {
   WORKSPACE_FORMAT,
   WORKSPACE_FORMAT_VERSION,
 } from "@/lib/database/workspace-format";
-import { classifyUserSql } from "@/lib/database/sql-safety";
+import { classifyUserSql, getSqlQueryType } from "@/lib/database/sql-safety";
 import { assertReadOnlyQuery } from "@/lib/database/read-only-sql";
 import { quoteIdentifier, validateIdentifier } from "@/lib/database/visual-sql";
 import { canImportMySqlDump, type ConvertedMySqlDump } from "@/lib/import/mysql-dump";
@@ -227,7 +227,7 @@ export class DatabaseManager {
     return this.persistence.getSavedQueries(this.activeWorkspaceId);
   }
 
-  async saveQuery(name: string, sql: string, queryId?: string) {
+  async saveQuery(name: string, sql: string, queryId?: string, description?: string) {
     await this.initialize();
     const cleanName = name.trim();
     if (!cleanName) throw new Error("Enter a name for the saved query.");
@@ -238,6 +238,7 @@ export class DatabaseManager {
       id: existing?.id ?? `query-${this.activeWorkspaceId}-${this.createId()}`,
       workspaceId: this.activeWorkspaceId,
       name: cleanName,
+      description: description?.trim() || undefined,
       sql,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
@@ -263,6 +264,15 @@ export class DatabaseManager {
   async getWorkspaceStorageUsage() {
     await this.initialize();
     return this.persistence.getWorkspaceStorageUsage(this.activeWorkspaceId);
+  }
+
+  async getWorkspaceDatabaseCounts() {
+    await this.initialize();
+    const counts = await Promise.all(this.workspaces.map(async (workspace) => [
+      workspace.id,
+      (await this.persistence.getAllDatabases(workspace.id)).length,
+    ] as const));
+    return Object.fromEntries(counts);
   }
 
   async exportWorkspace(): Promise<PortableWorkspaceFile> {
@@ -586,11 +596,21 @@ export class DatabaseManager {
       const result = operation === "read"
         ? await this.worker.executeSql(databaseId, sql, { readOnly: true })
         : await this.commitMutation(databaseId, sql.trim().slice(0, 120), () => this.worker.executeSql(databaseId, sql, { readOnly: false }));
-      const history = this.createHistoryEntry({ databaseId, databaseName, sql, operation, status: "success", durationMs: Math.max(result.elapsedMs, performance.now() - startedAt) });
+      const history = this.createHistoryEntry({
+        databaseId,
+        databaseName,
+        sql,
+        operation,
+        queryType: getSqlQueryType(sql),
+        status: "success",
+        durationMs: Math.max(result.elapsedMs, performance.now() - startedAt),
+        rowCount: result.rowCount,
+        rowsAffected: result.rowsAffected,
+      });
       await this.persistence.putQueryHistoryEntry(history);
       return { result, modified: operation === "write", history };
     } catch (error) {
-      const history = this.createHistoryEntry({ databaseId, databaseName, sql, operation, status: "error", durationMs: performance.now() - startedAt, error: error instanceof Error ? error.message : String(error) });
+      const history = this.createHistoryEntry({ databaseId, databaseName, sql, operation, queryType: getSqlQueryType(sql), status: "error", durationMs: performance.now() - startedAt, error: error instanceof Error ? error.message : String(error) });
       await this.persistence.putQueryHistoryEntry(history).catch(() => undefined);
       throw error;
     }
@@ -604,7 +624,7 @@ export class DatabaseManager {
     const sql = `CREATE TABLE ${quoteIdentifier(tableName)} AS ${selectSql.replace(/;\s*$/, "")}`;
     const result = await this.commitMutation(databaseId, `Save result as ${tableName}`, () => this.worker.executeSql(databaseId, sql, { readOnly: false }));
     const databaseName = this.databases.find((database) => database.id === databaseId)?.name ?? "Database";
-    const history = this.createHistoryEntry({ databaseId, databaseName, sql, operation: "write", status: "success", durationMs: result.elapsedMs });
+    const history = this.createHistoryEntry({ databaseId, databaseName, sql, operation: "write", queryType: "DDL", status: "success", durationMs: result.elapsedMs, rowCount: result.rowCount, rowsAffected: result.rowsAffected });
     await this.persistence.putQueryHistoryEntry(history);
     return { result, history };
   }

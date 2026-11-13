@@ -36,6 +36,9 @@ export function parsePortableWorkspace(text: string): PortableWorkspaceFile {
   value.settings.explorerWidth = typeof value.settings.explorerWidth === "number"
     ? Math.min(360, Math.max(230, Math.round(value.settings.explorerWidth)))
     : 270;
+  value.settings.selectedTable = typeof value.settings.selectedTable === "string"
+    ? value.settings.selectedTable
+    : null;
   const databaseIds = new Set<string>();
   for (const item of value.databases) {
     if (!item?.metadata?.id || !item.metadata.name || typeof item.sqliteBase64 !== "string") throw new Error("A database entry is incomplete.");

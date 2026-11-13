@@ -35,6 +35,7 @@ type DatabaseState = {
   workspaces: WorkspaceMetadata[];
   activeWorkspaceId: string | null;
   savedQueries: SavedQuery[];
+  workspaceDatabaseCounts: Record<string, number>;
   workspaceUsage: WorkspaceStorageUsage | null;
   databases: DatabaseMetadata[];
   activeDatabaseId: string | null;
@@ -66,7 +67,7 @@ type DatabaseState = {
   saveWorkspaceSettings: (settings: WorkspaceSettings) => Promise<void>;
   exportWorkspace: () => Promise<PortableWorkspaceFile>;
   importWorkspace: (workspace: PortableWorkspaceFile, overwrite?: boolean) => Promise<void>;
-  saveQuery: (name: string, sql: string, queryId?: string) => Promise<void>;
+  saveQuery: (name: string, sql: string, queryId?: string, description?: string) => Promise<void>;
   deleteSavedQuery: (queryId: string) => Promise<void>;
   exportDatabase: (databaseId: string) => Promise<{ metadata: DatabaseMetadata; bytes: Uint8Array }>;
   exportTable: (tableName: string) => Promise<QueryResult>;
@@ -153,12 +154,13 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
 
   const hydrateWorkspaceMetadata = async () => {
     const manager = getDatabaseManager();
-    const [savedQueries, workspaceUsage, queryHistory] = await Promise.all([
+    const [savedQueries, workspaceUsage, queryHistory, workspaceDatabaseCounts] = await Promise.all([
       manager.listSavedQueries(),
       manager.getWorkspaceStorageUsage(),
       manager.listQueryHistory(),
+      manager.getWorkspaceDatabaseCounts(),
     ]);
-    set({ savedQueries, workspaceUsage, queryHistory });
+    set({ savedQueries, workspaceUsage, queryHistory, workspaceDatabaseCounts });
   };
 
   return {
@@ -166,6 +168,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
     workspaces: [],
     activeWorkspaceId: null,
     savedQueries: [],
+    workspaceDatabaseCounts: {},
     workspaceUsage: null,
     databases: [],
     activeDatabaseId: null,
@@ -203,7 +206,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
           activeDatabaseId: snapshot.activeDatabaseId,
         });
         useWorkspaceStore.setState({ ...snapshot.workspaceSettings, queuedSql: null });
-        await hydrateActiveDatabase();
+        await hydrateActiveDatabase(snapshot.workspaceSettings.selectedTable ?? undefined);
         await Promise.all([syncCheckpointStatus(), hydrateWorkspaceMetadata()]);
         set({ status: "ready" });
       } catch (error) {
@@ -218,7 +221,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
         const snapshot = await getDatabaseManager().createWorkspace(name);
         set({ workspaces: snapshot.workspaces, activeWorkspaceId: snapshot.activeWorkspaceId, databases: snapshot.databases, activeDatabaseId: snapshot.activeDatabaseId, isMutating: false });
         useWorkspaceStore.setState({ ...snapshot.workspaceSettings, queuedSql: null });
-        await Promise.all([hydrateActiveDatabase(), hydrateWorkspaceMetadata(), syncCheckpointStatus()]);
+        await Promise.all([hydrateActiveDatabase(snapshot.workspaceSettings.selectedTable ?? undefined), hydrateWorkspaceMetadata(), syncCheckpointStatus()]);
       } catch (error) { set({ isMutating: false, error: errorMessage(error) }); throw error; }
     },
 
@@ -230,7 +233,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
         const snapshot = await getDatabaseManager().switchWorkspace(workspaceId);
         set({ workspaces: snapshot.workspaces, activeWorkspaceId: snapshot.activeWorkspaceId, databases: snapshot.databases, activeDatabaseId: snapshot.activeDatabaseId });
         useWorkspaceStore.setState({ ...snapshot.workspaceSettings, queuedSql: null });
-        await Promise.all([hydrateActiveDatabase(), hydrateWorkspaceMetadata(), syncCheckpointStatus()]);
+        await Promise.all([hydrateActiveDatabase(snapshot.workspaceSettings.selectedTable ?? undefined), hydrateWorkspaceMetadata(), syncCheckpointStatus()]);
       } catch (error) { set({ isTableLoading: false, error: errorMessage(error) }); throw error; }
     },
 
@@ -249,7 +252,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
         const snapshot = await getDatabaseManager().deleteWorkspace(workspaceId);
         set({ workspaces: snapshot.workspaces, activeWorkspaceId: snapshot.activeWorkspaceId, databases: snapshot.databases, activeDatabaseId: snapshot.activeDatabaseId, isMutating: false });
         useWorkspaceStore.setState({ ...snapshot.workspaceSettings, queuedSql: null });
-        await Promise.all([hydrateActiveDatabase(), hydrateWorkspaceMetadata(), syncCheckpointStatus()]);
+        await Promise.all([hydrateActiveDatabase(snapshot.workspaceSettings.selectedTable ?? undefined), hydrateWorkspaceMetadata(), syncCheckpointStatus()]);
       } catch (error) { set({ isMutating: false, error: errorMessage(error) }); throw error; }
     },
 
@@ -267,12 +270,12 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
         const snapshot = await getDatabaseManager().importWorkspace(workspace, overwrite);
         set({ workspaces: snapshot.workspaces, activeWorkspaceId: snapshot.activeWorkspaceId, databases: snapshot.databases, activeDatabaseId: snapshot.activeDatabaseId, isImporting: false });
         useWorkspaceStore.setState({ ...snapshot.workspaceSettings, queuedSql: null });
-        await Promise.all([hydrateActiveDatabase(), hydrateWorkspaceMetadata(), syncCheckpointStatus()]);
+        await Promise.all([hydrateActiveDatabase(snapshot.workspaceSettings.selectedTable ?? undefined), hydrateWorkspaceMetadata(), syncCheckpointStatus()]);
       } catch (error) { set({ isImporting: false, error: errorMessage(error) }); throw error; }
     },
 
-    saveQuery: async (name, sql, queryId) => {
-      await getDatabaseManager().saveQuery(name, sql, queryId);
+    saveQuery: async (name, sql, queryId, description) => {
+      await getDatabaseManager().saveQuery(name, sql, queryId, description);
       const savedQueries = await getDatabaseManager().listSavedQueries();
       set({ savedQueries });
     },
