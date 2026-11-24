@@ -11,6 +11,7 @@ import {
   Minimize2,
   RefreshCcw,
   Rows3,
+  Focus,
   Sparkles,
   X,
 } from "lucide-react";
@@ -31,6 +32,8 @@ const TeachingSqlEditor = dynamic(
 );
 
 export function TeachingMode({ onExit }: { onExit: () => void }) {
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const exitButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const databases = useDatabaseStore((state) => state.databases);
   const activeDatabaseId = useDatabaseStore((state) => state.activeDatabaseId);
   const selectedTable = useDatabaseStore((state) => state.selectedTable);
@@ -41,6 +44,7 @@ export function TeachingMode({ onExit }: { onExit: () => void }) {
   const resetDatabase = useDatabaseStore((state) => state.resetDatabase);
   const [view, setView] = React.useState<TeachingView>(visualizationPlan ? "visualization" : "workspace");
   const [tableView, setTableView] = React.useState<TableView>("both");
+  const [focusMode, setFocusMode] = React.useState(false);
   const [isFullscreen, setIsFullscreen] = React.useState(() => typeof document !== "undefined" && Boolean(document.fullscreenElement));
   const activeDatabase = databases.find((database) => database.id === activeDatabaseId);
 
@@ -51,10 +55,19 @@ export function TeachingMode({ onExit }: { onExit: () => void }) {
 
   React.useEffect(() => {
     const previousOverflow = document.body.style.overflow;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.body.style.overflow = "hidden";
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") exit();
+      if (event.key === "Tab") {
+        const focusable = Array.from(rootRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? []);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
       if (event.altKey && event.key.toLowerCase() === "e") setView("workspace");
       if (event.altKey && event.key.toLowerCase() === "v" && visualizationPlan) setView("visualization");
       if (event.altKey && event.key.toLowerCase() === "o") setTableView("original");
@@ -62,10 +75,12 @@ export function TeachingMode({ onExit }: { onExit: () => void }) {
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
     window.addEventListener("keydown", onKeyDown);
+    window.setTimeout(() => exitButtonRef.current?.focus(), 0);
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("fullscreenchange", onFullscreenChange);
       window.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus();
     };
   }, [exit, visualizationPlan]);
 
@@ -85,18 +100,19 @@ export function TeachingMode({ onExit }: { onExit: () => void }) {
     }
   };
 
-  return <div className="fixed inset-0 z-[100] flex flex-col overflow-hidden bg-background text-foreground" role="dialog" aria-modal="true" aria-label="QueryQuest Teaching Mode">
-    <header className="flex min-h-18 flex-wrap items-center gap-3 border-b border-border bg-surface-elevated/95 px-5 py-3 shadow-lg backdrop-blur-xl md:px-8">
+  return <div ref={rootRef} className="fixed inset-0 z-[100] flex flex-col overflow-hidden bg-background text-foreground" role="dialog" aria-modal="true" aria-label="QueryQuest Teaching Mode">
+    <header className="workspace-scrollbar flex min-h-18 items-center gap-3 overflow-x-auto border-b border-border bg-surface-elevated/95 px-4 py-3 shadow-lg backdrop-blur-xl md:px-8">
       <div className="grid size-11 place-items-center rounded-xl bg-selected text-selected-foreground"><GraduationCap className="size-6" /></div>
-      <div className="mr-auto"><div className="flex items-center gap-2"><h1 className="font-display text-xl font-bold tracking-tight md:text-2xl">QueryQuest Teaching Mode</h1><span className="rounded-full border border-primary/25 bg-selected px-2.5 py-1 text-xs font-bold uppercase tracking-[.14em] text-selected-foreground">Live classroom</span></div><p className="mt-0.5 text-xs text-muted-foreground">{activeDatabase?.name ?? "No database"}{selectedTable ? ` · ${selectedTable}` : ""} · Esc to exit</p></div>
+      <div className="mr-auto min-w-64"><div className="flex items-center gap-2"><h1 className="whitespace-nowrap font-display text-xl font-bold tracking-tight md:text-2xl">QueryQuest Teaching Mode</h1><span className="hidden rounded-full border border-primary/25 bg-selected px-2.5 py-1 text-xs font-bold uppercase tracking-[.14em] text-selected-foreground xl:inline-flex">Live classroom</span></div><p className="mt-0.5 text-sm text-muted-foreground">{activeDatabase?.name ?? "No database"}{selectedTable ? ` · ${selectedTable}` : ""} · Esc to exit</p></div>
       <nav className="flex items-center gap-1 rounded-xl border border-border bg-surface p-1" aria-label="Teaching mode views"><button type="button" onClick={() => setView("workspace")} className={cn("flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition", view === "workspace" ? "bg-selected text-selected-foreground" : "text-muted-foreground hover:bg-hover hover:text-foreground")}><FileCode2 className="size-4" />Editor & tables</button><button type="button" onClick={() => setView("visualization")} disabled={!visualizationPlan} className={cn("flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition disabled:opacity-60", view === "visualization" ? "bg-selected text-selected-foreground" : "text-muted-foreground hover:bg-hover hover:text-foreground")}><Sparkles className="size-4" />Visualization</button></nav>
       <Button variant="outline" onClick={() => void reset()} disabled={isMutating}>{isMutating ? <LoaderCircle className="animate-spin" /> : <RefreshCcw />}Reset to Original Data</Button>
+      {view === "visualization" ? <Button variant={focusMode ? "default" : "outline"} onClick={() => setFocusMode((current) => !current)} aria-pressed={focusMode}><Focus />Focus step</Button> : null}
       <Button variant="ghost" size="icon" onClick={toggleFullscreen} aria-label={isFullscreen ? "Exit full screen" : "Enter full screen"}>{isFullscreen ? <Minimize2 /> : <Expand />}</Button>
-      <Button variant="ghost" size="icon" className="hover:bg-destructive-tint hover:text-destructive" onClick={exit} aria-label="Exit Teaching Mode"><X /></Button>
+      <Button ref={exitButtonRef} variant="ghost" className="hover:bg-destructive-tint hover:text-destructive" onClick={exit} aria-label="Exit Teaching Mode"><X /><span className="hidden sm:inline">Exit</span></Button>
     </header>
 
     <main className="workspace-scrollbar min-h-0 flex-1 overflow-y-auto">
-      {view === "visualization" && visualizationPlan ? <VisualizerPlayer key={`${visualizationPlan.sql}-${visualizationPlan.finalResult.elapsedMs}`} plan={visualizationPlan} presentation onExit={exit} /> : <div className="min-h-full">
+      {view === "visualization" && visualizationPlan ? <VisualizerPlayer key={`${visualizationPlan.sql}-${visualizationPlan.finalResult.elapsedMs}`} plan={visualizationPlan} presentation focusMode={focusMode} /> : <div className="min-h-full">
         <TeachingSqlEditor presentation onVisualizationReady={() => setView("visualization")} />
         <section className="border-t border-border bg-surface p-4 md:p-6">
           <div className="mb-4 flex flex-wrap items-center gap-3"><div><h2 className="font-display text-xl font-semibold">Classroom data view</h2><p className="mt-1 text-sm text-muted-foreground">Compare the unchanged source with the real SQLite result.</p></div><div className="ml-auto flex items-center gap-1 rounded-xl border border-border bg-surface-elevated p-1">{(["both", "original", "result"] as const).map((option) => <button key={option} type="button" onClick={() => setTableView(option)} className={cn("flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold capitalize transition", tableView === option ? "bg-selected text-selected-foreground" : "text-muted-foreground hover:bg-hover hover:text-foreground")}>{option === "original" ? <Database className="size-4" /> : option === "result" ? <Rows3 className="size-4" /> : null}{option}</button>)}</div></div>
@@ -111,9 +127,9 @@ export function TeachingMode({ onExit }: { onExit: () => void }) {
 }
 
 function TeachingTablePanel({ title, subtitle, tone, children }: { title: string; subtitle: string; tone: "blue" | "violet"; children: React.ReactNode }) {
-  return <article className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-lg"><header className="flex items-center gap-3 border-b border-border px-5 py-4"><span className={cn("size-2.5 rounded-full", tone === "blue" ? "bg-info" : "bg-primary")} /><div><h3 className="text-base font-bold">{title}</h3><p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p></div></header><div className="workspace-scrollbar max-h-[44vh] overflow-auto">{children}</div></article>;
+  return <article className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-lg"><header className="flex items-center gap-3 border-b border-border px-5 py-4"><span className={cn("size-2.5 rounded-full", tone === "blue" ? "bg-info" : "bg-primary")} /><div><h3 className="text-lg font-bold">{title}</h3><p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p></div></header><div className="workspace-scrollbar max-h-[44vh] overflow-auto">{children}</div></article>;
 }
 
 function TeachingEmpty({ title, description }: { title: string; description: string }) {
-  return <div className="grid min-h-64 place-items-center p-8 text-center"><div><Rows3 className="mx-auto size-8 text-muted-foreground" /><p className="mt-4 text-lg font-semibold">{title}</p><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">{description}</p></div></div>;
+  return <div className="grid min-h-64 place-items-center p-8 text-center"><div><Rows3 className="mx-auto size-8 text-muted-foreground" /><p className="mt-4 text-xl font-semibold">{title}</p><p className="mx-auto mt-2 max-w-md text-base leading-7 text-muted-foreground">{description}</p></div></div>;
 }

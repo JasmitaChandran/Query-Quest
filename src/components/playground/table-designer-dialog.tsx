@@ -54,8 +54,17 @@ function ConstraintToggle({ label, checked, disabled, onChange }: { label: strin
   return <label className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium", disabled && "opacity-55")}><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className="size-3.5 accent-violet-500" />{label}</label>;
 }
 
-export function TableDesignerDialog({ trigger }: { trigger?: React.ReactNode } = {}) {
-  const [open, setOpen] = React.useState(false);
+type TableDesignerDialogProps = {
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+};
+
+export function TableDesignerDialog({ trigger, open, onOpenChange, hideTrigger = false }: TableDesignerDialogProps = {}) {
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const dialogOpen = open ?? internalOpen;
+  const setDialogOpen = onOpenChange ?? setInternalOpen;
   const [name, setName] = React.useState("new_table");
   const [columns, setColumns] = React.useState<DesignerColumn[]>([newColumn(0), newColumn(1)]);
   const [uniqueGroups, setUniqueGroups] = React.useState<UniqueGroup[]>([]);
@@ -117,7 +126,7 @@ export function TableDesignerDialog({ trigger }: { trigger?: React.ReactNode } =
     try {
       await createTable(definition);
       toast.success("Table created", { description: `${name} is ready for visual data entry.` });
-      setOpen(false);
+      setDialogOpen(false);
       reset();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not create the table.");
@@ -126,8 +135,8 @@ export function TableDesignerDialog({ trigger }: { trigger?: React.ReactNode } =
 
   const primaryCount = columns.filter((column) => column.primaryKey).length;
 
-  return <Dialog open={open} onOpenChange={setOpen}>
-    <DialogTrigger asChild>{trigger ?? <Button size="sm"><Plus /><span className="hidden sm:inline">Create table</span></Button>}</DialogTrigger>
+  return <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+    {!hideTrigger ? <DialogTrigger asChild>{trigger ?? <Button size="sm"><Plus /><span className="hidden sm:inline">Create table</span></Button>}</DialogTrigger> : null}
     <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto p-0">
       <div className="border-b p-6">
         <DialogHeader>
@@ -189,7 +198,7 @@ export function TableDesignerDialog({ trigger }: { trigger?: React.ReactNode } =
         </aside>
       </div>
 
-      <DialogFooter className="border-t p-6"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button type="button" onClick={() => void submit()} disabled={isMutating || Boolean(previewError)}>{isMutating ? <LoaderCircle className="animate-spin" /> : <Plus />}{isMutating ? "Creating…" : "Create table"}</Button></DialogFooter>
+      <DialogFooter className="border-t p-6"><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button><Button type="button" onClick={() => void submit()} disabled={isMutating || Boolean(previewError)}>{isMutating ? <LoaderCircle className="animate-spin" /> : <Plus />}{isMutating ? "Creating…" : "Create table"}</Button></DialogFooter>
     </DialogContent>
   </Dialog>;
 }

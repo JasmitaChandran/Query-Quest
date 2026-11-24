@@ -10,6 +10,10 @@ export function Toaster(props: ToasterProps) {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       position="bottom-right"
+      closeButton
+      duration={4500}
+      visibleToasts={4}
+      gap={10}
       toastOptions={{
         classNames: {
           toast: "!rounded-lg !border-border !bg-card !text-[13px] !text-card-foreground !shadow-2xl",

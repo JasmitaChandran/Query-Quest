@@ -8,7 +8,9 @@ import { loader } from "@monaco-editor/react";
 import * as monacoEditor from "monaco-editor";
 import { format } from "sql-formatter";
 import {
+  BookOpen,
   Braces,
+  ChevronDown,
   FileCode2,
   Keyboard,
   LoaderCircle,
@@ -26,6 +28,7 @@ import type { TableSchema, TableSummary } from "@/lib/database/types";
 import { useDatabaseStore } from "@/store/database-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { classifyUserSql, isDestructiveSql } from "@/lib/database/sql-safety";
+import { buildSqlExamples } from "@/lib/database/sql-examples";
 import { cn } from "@/lib/utils";
 
 loader.config({ monaco: monacoEditor });
@@ -168,12 +171,16 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
     tables: TableSummary[];
     schemas: Record<string, TableSchema>;
   }>({ tables: [], schemas: {} });
+  const examplesRef = React.useRef<HTMLDivElement | null>(null);
+  const [examplesOpen, setExamplesOpen] = React.useState(false);
+  const [announcement, setAnnouncement] = React.useState("");
 
   const status = useDatabaseStore((state) => state.status);
   const activeDatabaseId = useDatabaseStore((state) => state.activeDatabaseId);
   const isQueryRunning = useDatabaseStore((state) => state.isQueryRunning);
   const tables = useDatabaseStore((state) => state.tables);
   const tableSchemas = useDatabaseStore((state) => state.tableSchemas);
+  const selectedTable = useDatabaseStore((state) => state.selectedTable);
   const runQuery = useDatabaseStore((state) => state.runQuery);
   const visualizeQuery = useDatabaseStore((state) => state.visualizeQuery);
   const isVisualizationLoading = useDatabaseStore((state) => state.isVisualizationLoading);
@@ -183,6 +190,10 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
   const setActivePanel = useWorkspaceStore((state) => state.setActivePanel);
   const query = useWorkspaceStore((state) => state.editorSql);
   const setQuery = useWorkspaceStore((state) => state.setEditorSql);
+  const examples = React.useMemo(
+    () => buildSqlExamples(tables, tableSchemas, selectedTable),
+    [selectedTable, tableSchemas, tables],
+  );
 
   React.useEffect(() => {
     completionDataRef.current = { tables, schemas: tableSchemas };
@@ -193,9 +204,11 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
       if (!sql.trim() || isQueryRunning || status !== "ready" || !activeDatabaseId) return;
       if (isDestructiveSql(sql) && !window.confirm("This SQL can delete data or alter schema. A checkpoint will be saved first. Continue?")) return;
       try {
-        await runQuery(sql);
+        const result = await runQuery(sql);
+        setAnnouncement(`Query complete. ${result.rowCount} row${result.rowCount === 1 ? "" : "s"} returned in ${result.elapsedMs.toFixed(1)} milliseconds.`);
         toast.success("Query complete", { description: "The result table has been updated." });
       } catch (error) {
+        setAnnouncement(`Query failed. ${error instanceof Error ? error.message : "Check the SQL and try again."}`);
         toast.error("Query could not run", {
           description: error instanceof Error ? error.message : "Check the SQL and try again.",
         });
@@ -317,6 +330,44 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
     }
   };
 
+  const loadExample = React.useCallback((sql: string, label: string) => {
+    const current = editorRef.current?.getValue() ?? query;
+    if (current.trim() && current.trim() !== sql.trim() && !window.confirm("Replace the SQL currently in the editor? The example will be loaded but not executed.")) return;
+    setQuery(sql);
+    editorRef.current?.setValue(sql);
+    editorRef.current?.focus();
+    setExamplesOpen(false);
+    setAnnouncement(`${label} example loaded. It has not been executed.`);
+    toast.success("SQL example loaded", { description: "Review it, then run or visualize it when ready." });
+  }, [query, setQuery]);
+
+  React.useEffect(() => {
+    if (!examplesOpen) return;
+    const closeExamples = (event: PointerEvent) => {
+      if (!examplesRef.current?.contains(event.target as Node)) setExamplesOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExamplesOpen(false);
+    };
+    window.addEventListener("pointerdown", closeExamples);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeExamples);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [examplesOpen]);
+
+  React.useEffect(() => {
+    const run = () => void executeQueryRef.current(editorRef.current?.getValue() ?? query);
+    const visualize = () => void handleVisualize();
+    window.addEventListener("queryquest:run-sql", run);
+    window.addEventListener("queryquest:visualize-sql", visualize);
+    return () => {
+      window.removeEventListener("queryquest:run-sql", run);
+      window.removeEventListener("queryquest:visualize-sql", visualize);
+    };
+  });
+
   const canRun = status === "ready" && Boolean(activeDatabaseId) && Boolean(query.trim());
 
   return (
@@ -332,7 +383,7 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
         </div>
       </div>
 
-      <div className={cn("flex flex-wrap items-center gap-2 border-b border-border bg-surface px-3 py-2 sm:px-4", presentation ? "min-h-16" : "min-h-12")}>
+      <div className={cn("relative flex flex-wrap items-center gap-2 border-b border-border bg-surface px-3 py-2 sm:px-4", presentation ? "min-h-16" : "min-h-12")}>
         <Button
           size={presentation ? "default" : "sm"}
           onClick={() => void executeQuery(editorRef.current?.getValue() ?? query)}
@@ -344,6 +395,23 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
         <span className="hidden items-center gap-1 rounded-md border border-border bg-muted/45 px-2 py-1 font-mono text-xs text-muted-foreground sm:inline-flex">
           <Keyboard className="size-3" /> Ctrl/⌘ Enter
         </span>
+        {!presentation ? <div ref={examplesRef} className="relative">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setExamplesOpen((open) => !open)}
+            disabled={examples.length === 0}
+            aria-haspopup="menu"
+            aria-expanded={examplesOpen}
+            title={examples.length ? "Load a schema-aware SQL example" : "Select a table to see SQL examples"}
+          >
+            <BookOpen /> Examples <ChevronDown className="size-3.5" />
+          </Button>
+          {examplesOpen ? <div role="menu" aria-label="SQL examples" className="absolute left-0 top-[calc(100%+.5rem)] z-50 w-80 overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl">
+            <div className="border-b border-border px-2.5 py-2"><p className="text-[13px] font-semibold">Examples for this schema</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">Loads real table and column names. Nothing runs automatically.</p></div>
+            <div className="workspace-scrollbar max-h-72 overflow-y-auto py-1">{examples.map((example) => <button key={`${example.kind}-${example.label}`} type="button" role="menuitem" onClick={() => loadExample(example.sql, example.label)} className="w-full rounded-lg px-2.5 py-2 text-left transition hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"><span className="block text-[13px] font-semibold">{example.label}</span><span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{example.description}</span></button>)}</div>
+          </div> : null}
+        </div> : null}
         <Button variant="outline" size={presentation ? "default" : "sm"} onClick={() => void handleVisualize()} disabled={!canRun || isQueryRunning || isVisualizationLoading}>
           {isVisualizationLoading ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
           {isVisualizationLoading ? "Analyzing…" : "Visualize Query"}
@@ -373,6 +441,7 @@ export function MonacoSqlEditor({ presentation = false, onVisualizationReady }: 
           <span className="hidden sm:inline">Clear</span>
         </Button>
         <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1 rounded-md border border-success/30 bg-success-tint px-2 py-1 text-xs font-semibold text-success"><ShieldCheck className="size-3" />Checkpoint protected</span></div>
+        <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
       </div>
 
       <div className={cn("min-h-[220px]", presentation ? "h-[calc(100%-7rem)]" : "h-[260px] md:h-[calc(100%-6rem)]")}>

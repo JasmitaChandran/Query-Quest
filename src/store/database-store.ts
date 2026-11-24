@@ -74,7 +74,7 @@ type DatabaseState = {
   refreshWorkspaceMetadata: () => Promise<void>;
   switchDatabase: (databaseId: string) => Promise<void>;
   selectTable: (tableName: string) => Promise<void>;
-  runQuery: (sql: string) => Promise<void>;
+  runQuery: (sql: string) => Promise<QueryResult>;
   createDatabase: (name: string) => Promise<void>;
   renameDatabase: (databaseId: string, name: string) => Promise<void>;
   deleteDatabase: (databaseId: string) => Promise<void>;
@@ -333,6 +333,7 @@ export const useDatabaseStore = create<DatabaseState>((set, get) => {
         if (execution.modified) await hydrateActiveDatabase(get().selectedTable ?? undefined);
         set({ queryResult: execution.result, lastSelectSql: execution.modified ? null : sql, queryError: null, isQueryRunning: false, queryHistory: [execution.history, ...get().queryHistory].slice(0, 200) });
         await syncCheckpointStatus();
+        return execution.result;
       } catch (error) {
         const message = errorMessage(error);
         const queryHistory = await getDatabaseManager().listQueryHistory().catch(() => get().queryHistory);

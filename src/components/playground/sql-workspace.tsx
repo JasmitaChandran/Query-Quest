@@ -4,6 +4,7 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import {
   AlertCircle,
+  BookOpenCheck,
   ChevronDown,
   ChevronRight,
   Code2,
@@ -44,11 +45,13 @@ import { TableActionsMenu } from "@/components/playground/table-actions-menu";
 import { TableSchemaEditorDialog } from "@/components/playground/table-schema-editor-dialog";
 import { TeachingMode } from "@/components/playground/teaching-mode";
 import { WorkspaceManagerDialog } from "@/components/playground/workspace-manager-dialog";
+import { CommandPalette } from "@/components/playground/command-palette";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { queryResultToCsv } from "@/lib/database/workspace-format";
+import { buildSqlExamples } from "@/lib/database/sql-examples";
 import { useDatabaseStore } from "@/store/database-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 
@@ -152,10 +155,10 @@ function ExplorerSidebar() {
   return (
     <aside
       className={cn(
-        "relative shrink-0 border-b border-border bg-sidebar transition-[width] duration-200 md:border-b-0 md:border-r",
+        "relative shrink-0 border-b border-border bg-sidebar transition-[width] duration-200 lg:border-b-0 lg:border-r",
         explorerCollapsed
-          ? "h-11 w-full overflow-hidden md:h-auto md:w-14"
-          : "h-80 w-full overflow-hidden md:h-auto md:w-[var(--explorer-width)] md:min-w-[230px] md:max-w-[360px]",
+          ? "h-11 w-full overflow-hidden lg:h-auto lg:w-14"
+          : "h-[calc(100dvh-7.5rem)] w-full overflow-hidden max-lg:fixed max-lg:inset-x-3 max-lg:top-[7rem] max-lg:z-40 max-lg:w-auto max-lg:rounded-xl max-lg:border max-lg:shadow-2xl lg:h-auto lg:w-[var(--explorer-width)] lg:min-w-[230px] lg:max-w-[360px]",
       )}
       style={{ "--explorer-width": `${explorerWidth}px` } as React.CSSProperties}
       aria-label="Database explorer"
@@ -167,7 +170,7 @@ function ExplorerSidebar() {
             Database Explorer
           </div>
         ) : (
-          <Database className="mx-auto hidden size-4 text-muted-foreground md:block" />
+          <Database className="mx-auto hidden size-4 text-muted-foreground lg:block" />
         )}
         <Button
           variant="ghost"
@@ -175,7 +178,7 @@ function ExplorerSidebar() {
           onClick={toggleExplorer}
           aria-label={explorerCollapsed ? "Expand database explorer" : "Collapse database explorer"}
           title={explorerCollapsed ? "Expand explorer" : "Collapse explorer"}
-          className={cn(explorerCollapsed && "absolute right-2 top-2 md:static")}
+          className={cn(explorerCollapsed && "absolute right-2 top-2 lg:static")}
         >
           {explorerCollapsed ? <ChevronRight /> : <PanelLeftClose />}
         </Button>
@@ -212,7 +215,7 @@ function ExplorerSidebar() {
 
               <section className="flex min-h-0 flex-1 flex-col">
                 <div className="flex min-h-11 items-center gap-2 px-3 pt-1"><div className="min-w-0 flex-1"><p className="ui-kicker truncate" title={activeDatabase?.name}>Tables — {activeDatabase?.name}</p></div><TableDesignerDialog trigger={<Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 px-2 text-xs"><Table2 className="size-3.5" />Create</Button>} /></div>
-                <label className="mx-3 mb-2 flex h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-muted-foreground"><Search className="size-3.5" /><input value={tableFilter} onChange={(event) => setTableFilter(event.target.value)} placeholder="Search tables…" className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none" /><span className="text-xs tabular-nums">{filteredTables.length}</span></label>
+                <label className="mx-3 mb-2 flex h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-muted-foreground"><Search className="size-3.5" /><input id="database-table-search" value={tableFilter} onChange={(event) => setTableFilter(event.target.value)} placeholder="Search tables…" className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none" /><span className="text-xs tabular-nums">{filteredTables.length}</span></label>
                 {tables.length === 0 ? <div className="flex flex-1 flex-col items-center justify-center px-5 py-7 text-center"><div className="grid size-11 place-items-center rounded-2xl border border-border bg-muted/45 text-muted-foreground"><Table2 className="size-5" /></div><p className="mt-4 text-sm font-semibold">No tables yet.</p><p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">Create the first table in {activeDatabase?.name}.</p><div className="mt-4"><TableDesignerDialog /></div></div> : <div className="workspace-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">{filteredTables.length ? <div className="space-y-1">{filteredTables.map((table) => {
                   const selected = selectedTable === table.name;
                   const expanded = expandedTables.has(table.name) || (
@@ -237,7 +240,7 @@ function ExplorerSidebar() {
           )}
         </div>
       ) : null}
-      {!explorerCollapsed ? <div role="separator" aria-orientation="vertical" aria-label="Resize database explorer" title="Drag to resize Database Explorer" onPointerDown={startResize} className="absolute inset-y-0 right-0 z-20 hidden w-1.5 cursor-col-resize touch-none bg-transparent transition hover:bg-primary/25 md:block" /> : null}
+      {!explorerCollapsed ? <div role="separator" aria-orientation="vertical" aria-label="Resize database explorer" title="Drag to resize Database Explorer" onPointerDown={startResize} className="absolute inset-y-0 right-0 z-20 hidden w-1.5 cursor-col-resize touch-none bg-transparent transition hover:bg-primary/25 lg:block" /> : null}
       <TableSchemaEditorDialog tableName={schemaEditorTable} open={Boolean(schemaEditorTable)} onOpenChange={(nextOpen) => { if (!nextOpen) setSchemaEditorTable(null); }} />
     </aside>
   );
@@ -342,6 +345,39 @@ function EditorDatabaseContextBar() {
   </div>;
 }
 
+function WelcomePanel({ onImport, onCreateDatabase }: { onImport: () => void; onCreateDatabase: () => void }) {
+  const [visible, setVisible] = React.useState(false);
+  const databases = useDatabaseStore((state) => state.databases);
+  const tables = useDatabaseStore((state) => state.tables);
+  const schemas = useDatabaseStore((state) => state.tableSchemas);
+  const selectedTable = useDatabaseStore((state) => state.selectedTable);
+  const queryHistory = useDatabaseStore((state) => state.queryHistory);
+  const savedQueries = useDatabaseStore((state) => state.savedQueries);
+  const selectTable = useDatabaseStore((state) => state.selectTable);
+  const setEditorSql = useWorkspaceStore((state) => state.setEditorSql);
+
+  React.useEffect(() => {
+    setVisible(window.localStorage.getItem("queryquest-welcome-dismissed-v1") !== "true");
+  }, []);
+
+  if (!visible || queryHistory.length > 0 || savedQueries.length > 0) return null;
+  const dismiss = () => {
+    window.localStorage.setItem("queryquest-welcome-dismissed-v1", "true");
+    setVisible(false);
+  };
+  const explore = async () => {
+    const tableName = selectedTable ?? tables[0]?.name;
+    if (!tableName) return;
+    if (selectedTable !== tableName) await selectTable(tableName);
+    const example = buildSqlExamples(tables, schemas, tableName)[0];
+    if (example) setEditorSql(example.sql);
+  };
+
+  return <section className="border-b border-primary/20 bg-selected/55 px-4 py-3" aria-labelledby="welcome-queryquest-title">
+    <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"><BookOpenCheck className="size-5" /></div><div className="min-w-52 flex-1"><h2 id="welcome-queryquest-title" className="text-sm font-semibold">Welcome to your browser-local SQL workspace</h2><p className="mt-0.5 text-[13px] leading-5 text-muted-foreground">{databases.length ? "Start with a real schema-aware example, then run it when you are ready." : "Import a database or create an empty SQLite database to begin."}</p></div><div className="flex flex-wrap gap-2">{tables.length ? <Button size="sm" onClick={() => void explore()}>Explore sample schema</Button> : null}<Button size="sm" variant="outline" onClick={onImport}>Import Database</Button>{databases.length === 0 ? <Button size="sm" variant="outline" onClick={onCreateDatabase}>Create Database</Button> : null}<Button size="sm" variant="ghost" onClick={dismiss}>Dismiss</Button></div></div>
+  </section>;
+}
+
 function WorkspaceNavigation({ onEnterTeachingMode }: { onEnterTeachingMode: () => void }) {
   const { activePanel, setActivePanel } = useWorkspaceStore();
   const canUndo = useDatabaseStore((state) => state.canUndo);
@@ -358,7 +394,7 @@ function WorkspaceNavigation({ onEnterTeachingMode }: { onEnterTeachingMode: () 
   };
 
   return (
-    <div className="flex min-h-11 items-center gap-1 overflow-x-auto border-b border-border bg-surface px-3 sm:px-4">
+    <div className="flex min-h-11 items-center gap-1 overflow-x-auto border-b border-border bg-surface px-3 sm:px-4" role="tablist" aria-label="SQL workspace">
       {workspaceTabs.map((tab) => {
         const Icon = tab.icon;
         const active = activePanel === tab.id;
@@ -367,6 +403,10 @@ function WorkspaceNavigation({ onEnterTeachingMode }: { onEnterTeachingMode: () 
             key={tab.id}
             type="button"
             onClick={() => setActivePanel(tab.id)}
+            role="tab"
+            aria-selected={active}
+            aria-controls={`workspace-panel-${tab.id}`}
+            title={`${tab.label} · Alt+${workspaceTabs.indexOf(tab) + 1}`}
             className={cn(
               "relative inline-flex h-11 shrink-0 items-center gap-2 px-3 text-[13px] font-medium text-muted-foreground transition hover:text-foreground",
               active && "text-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary",
@@ -378,6 +418,7 @@ function WorkspaceNavigation({ onEnterTeachingMode }: { onEnterTeachingMode: () 
         );
       })}
       <div className="ml-auto flex items-center gap-1 border-l pl-2">
+        <CommandPalette onEnterTeachingMode={onEnterTeachingMode} />
         <WorkspaceManagerDialog />
         <Button variant="outline" size="sm" className="mr-1 border-primary/25 bg-selected text-selected-foreground hover:bg-hover" onClick={onEnterTeachingMode} aria-label="Enter Teaching Mode"><GraduationCap /><span className="hidden lg:inline">Teaching Mode</span></Button>
         <Button variant="ghost" size="icon-sm" disabled={!canUndo || isMutating} onClick={() => void runAction("undo")} title="Undo database change" aria-label="Undo database change"><Undo2 /></Button>
@@ -406,6 +447,8 @@ function DatabaseErrorBanner() {
 
 export function SqlWorkspace() {
   const [teachingMode, setTeachingMode] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
+  const [createDatabaseOpen, setCreateDatabaseOpen] = React.useState(false);
   const status = useDatabaseStore((state) => state.status);
   const databases = useDatabaseStore((state) => state.databases);
   const activeDatabaseId = useDatabaseStore((state) => state.activeDatabaseId);
@@ -414,6 +457,8 @@ export function SqlWorkspace() {
   const editorSql = useWorkspaceStore((state) => state.editorSql);
   const explorerCollapsed = useWorkspaceStore((state) => state.explorerCollapsed);
   const explorerWidth = useWorkspaceStore((state) => state.explorerWidth);
+  const setExplorerCollapsed = useWorkspaceStore((state) => state.setExplorerCollapsed);
+  const setActivePanel = useWorkspaceStore((state) => state.setActivePanel);
   const selectedTable = useDatabaseStore((state) => state.selectedTable);
   const activeWorkspaceId = useDatabaseStore((state) => state.activeWorkspaceId);
   const saveWorkspaceSettings = useDatabaseStore((state) => state.saveWorkspaceSettings);
@@ -426,21 +471,51 @@ export function SqlWorkspace() {
     return () => window.clearTimeout(timeout);
   }, [activePanel, activeWorkspaceId, editorSql, explorerCollapsed, explorerWidth, saveWorkspaceSettings, selectedTable, status]);
 
+  React.useEffect(() => {
+    if (window.matchMedia("(max-width: 1023px)").matches) setExplorerCollapsed(true);
+  }, [setExplorerCollapsed]);
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const element = event.target instanceof HTMLElement ? event.target : null;
+      if (element?.closest("input, textarea, select, [contenteditable='true'], .monaco-editor")) return;
+      if (event.altKey && !event.ctrlKey && !event.metaKey) {
+        const index = Number(event.key) - 1;
+        const tab = workspaceTabs[index];
+        if (tab) {
+          event.preventDefault();
+          setActivePanel(tab.id);
+        }
+      }
+      if (event.key === "/" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        const search = document.getElementById("database-table-search") as HTMLInputElement | null;
+        if (search) {
+          event.preventDefault();
+          search.focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [setActivePanel]);
+
+  const enterTeachingMode = React.useCallback(() => {
+    setTeachingMode(true);
+    void document.documentElement.requestFullscreen?.().catch(() => undefined);
+  }, []);
+
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col bg-background">
-      <WorkspaceNavigation onEnterTeachingMode={() => {
-        setTeachingMode(true);
-        void document.documentElement.requestFullscreen?.().catch(() => undefined);
-      }} />
+      <WorkspaceNavigation onEnterTeachingMode={enterTeachingMode} />
       <DatabaseErrorBanner />
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <ExplorerSidebar />
         <div className="min-w-0 flex-1">
-          <div hidden={activePanel !== "editor"}><EditorDatabaseContextBar /><MonacoSqlEditor /><div className="flex min-h-[290px] flex-col divide-y divide-border md:flex-row md:divide-x md:divide-y-0"><DataPanel kind="source" className="md:resize-x md:overflow-auto" /><DataPanel kind="result" /></div></div>
-          <div hidden={activePanel !== "visualizer"}><QueryVisualizer /></div>
-          <div hidden={activePanel !== "data"}><VisualDataEditor /></div>
-          <div hidden={activePanel !== "schema"}><SchemaDiagram /></div>
-          <div hidden={activePanel !== "history"}><QueryHistoryPanel /></div>
+          <div id="workspace-panel-editor" role="tabpanel" hidden={activePanel !== "editor"}><WelcomePanel onImport={() => setImportOpen(true)} onCreateDatabase={() => setCreateDatabaseOpen(true)} /><EditorDatabaseContextBar /><MonacoSqlEditor /><div className="flex min-h-[290px] flex-col divide-y divide-border xl:flex-row xl:divide-x xl:divide-y-0"><DataPanel kind="source" className="xl:resize-x xl:overflow-auto" /><DataPanel kind="result" /></div></div>
+          <div id="workspace-panel-visualizer" role="tabpanel" hidden={activePanel !== "visualizer"}><QueryVisualizer /></div>
+          <div id="workspace-panel-data" role="tabpanel" hidden={activePanel !== "data"}><VisualDataEditor /></div>
+          <div id="workspace-panel-schema" role="tabpanel" hidden={activePanel !== "schema"}><SchemaDiagram /></div>
+          <div id="workspace-panel-history" role="tabpanel" hidden={activePanel !== "history"}><QueryHistoryPanel /></div>
         </div>
       </div>
       <footer className="flex min-h-8 flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-surface-elevated px-3 py-1 text-xs text-muted-foreground sm:px-4">
@@ -458,6 +533,8 @@ export function SqlWorkspace() {
         </span>
       </footer>
       {teachingMode ? <TeachingMode onExit={() => setTeachingMode(false)} /> : null}
+      <ImportDatabaseDialog hideTrigger open={importOpen} onOpenChange={setImportOpen} />
+      <CreateDatabaseDialog hideTrigger open={createDatabaseOpen} onOpenChange={setCreateDatabaseOpen} />
     </div>
   );
 }

@@ -330,16 +330,25 @@ textarea::placeholder {
 .teaching-visualizer th {
   height: 3rem;
   padding-inline: 1.25rem;
-  font-size: 0.875rem;
+  font-size: 1rem;
 }
 
 .teaching-visualizer td {
   padding: 1rem 1.25rem;
-  font-size: 1rem;
+  font-size: 1.0625rem;
 }
 
 .teaching-visualizer .workspace-scrollbar {
   max-height: 50vh;
+}
+
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  [role="menuitem"],
+  [role="tab"] {
+    min-height: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -14,17 +14,26 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-export function ImportDatabaseDialog({ triggerLabel = "Import Database" }: { triggerLabel?: string } = {}) {
-  const [open, setOpen] = React.useState(false);
+type ImportDatabaseDialogProps = {
+  triggerLabel?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+};
+
+export function ImportDatabaseDialog({ triggerLabel = "Import Database", open, onOpenChange, hideTrigger = false }: ImportDatabaseDialogProps = {}) {
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const dialogOpen = open ?? internalOpen;
+  const setDialogOpen = onOpenChange ?? setInternalOpen;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {!hideTrigger ? <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="min-w-0 justify-center">
           <Import />
           {triggerLabel}
         </Button>
-      </DialogTrigger>
+      </DialogTrigger> : null}
       <DialogContent className="workspace-scrollbar max-h-[92vh] max-w-5xl gap-0 overflow-y-auto p-0">
         <DialogHeader className="border-b border-border px-5 py-5 pr-14 sm:px-6">
           <div className="mb-1 grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -36,7 +45,7 @@ export function ImportDatabaseDialog({ triggerLabel = "Import Database" }: { tri
           </DialogDescription>
         </DialogHeader>
         <div className="p-4 sm:p-6">
-          <DropZone onImported={() => setOpen(false)} onCancel={() => setOpen(false)} />
+          <DropZone onImported={() => setDialogOpen(false)} onCancel={() => setDialogOpen(false)} />
         </div>
       </DialogContent>
     </Dialog>

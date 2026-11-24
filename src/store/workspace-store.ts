@@ -13,6 +13,7 @@ type WorkspaceState = {
   runRequest: number;
   pendingDataEdits: number;
   toggleExplorer: () => void;
+  setExplorerCollapsed: (collapsed: boolean) => void;
   setExplorerWidth: (width: number) => void;
   setActivePanel: (panel: WorkspacePanel) => void;
   setEditorSql: (sql: string) => void;
@@ -32,6 +33,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   pendingDataEdits: 0,
   toggleExplorer: () =>
     set((state) => ({ explorerCollapsed: !state.explorerCollapsed })),
+  setExplorerCollapsed: (explorerCollapsed) => set({ explorerCollapsed }),
   setExplorerWidth: (explorerWidth) =>
     set({ explorerWidth: Math.min(360, Math.max(230, Math.round(explorerWidth))) }),
   setActivePanel: (activePanel) => set({ activePanel }),

@@ -16,8 +16,18 @@ import {
 } from "@/components/ui/dialog";
 import { useDatabaseStore } from "@/store/database-store";
 
-export function CreateDatabaseDialog({ compact = false, triggerLabel = "Create Database" }: { compact?: boolean; triggerLabel?: string }) {
-  const [open, setOpen] = React.useState(false);
+type CreateDatabaseDialogProps = {
+  compact?: boolean;
+  triggerLabel?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+};
+
+export function CreateDatabaseDialog({ compact = false, triggerLabel = "Create Database", open, onOpenChange, hideTrigger = false }: CreateDatabaseDialogProps) {
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const dialogOpen = open ?? internalOpen;
+  const setDialogOpen = onOpenChange ?? setInternalOpen;
   const [name, setName] = React.useState("");
   const createDatabase = useDatabaseStore((state) => state.createDatabase);
   const isCreating = useDatabaseStore((state) => state.isImporting);
@@ -29,7 +39,7 @@ export function CreateDatabaseDialog({ compact = false, triggerLabel = "Create D
       toast.success("Database created", {
         description: `${name.trim()} is ready and stored in this browser.`,
       });
-      setOpen(false);
+      setDialogOpen(false);
       setName("");
     } catch (error) {
       toast.error("Could not create database", {
@@ -39,13 +49,13 @@ export function CreateDatabaseDialog({ compact = false, triggerLabel = "Create D
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {!hideTrigger ? <DialogTrigger asChild>
         <Button variant="outline" size={compact ? "icon-sm" : "sm"} title="Create database" aria-label={compact ? "Create database" : undefined}>
           <Plus />
           {compact ? null : triggerLabel}
         </Button>
-      </DialogTrigger>
+      </DialogTrigger> : null}
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
